@@ -1,0 +1,24 @@
+
+Start .git
+
+Add gprs and imei parsing in parselib
+
+Attempt to do operations exclusively with bytes in receive and send.
+
+Fix connection termination
+
+Invalid packet crc detected
+
+Sending GPRS commands with rapid record generation/sending
+
+UDP support
+
+Multiple device support
+
+Automatic GPRS sending.
+
+Multiple servers
+
+TAVL functionality
+
+Encryption
