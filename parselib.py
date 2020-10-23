@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 
 import re
+import binascii
+import libscrc
 from datetime import datetime
 
 TCP_PACKET_PATTERN = re.compile(r'Packet len: .*, data: .*\n.*(this is correct single packet|no 0x31 at the end)')
@@ -125,10 +127,12 @@ def parse_record_payload(record_payload, no_of_records, codec='08'):
 
         Returns:
             records (list of dicts): a list containing dicts representing records.
+            reply (str): str representation of bytes that are sent to device as an ack of received records.
     """
     records = []
     rest_of_payload = record_payload
     mx = 1 if codec == '08' else 2
+    no_of_records_hex = no_of_records
     no_of_records = int(no_of_records, 16)
     recs_parsed = 0
     while recs_parsed < no_of_records:
@@ -158,4 +162,45 @@ def parse_record_payload(record_payload, no_of_records, codec='08'):
                 record[avl_id] = value
         recs_parsed += 1
         records.append(record)
-    return records
+        reply = '0' * (8 - len(no_of_records_hex)) + no_of_records_hex
+    return records, reply
+
+def parse_imei(data):
+    """
+    Parses IMEI from data received while establishing connection.
+
+        Parameters:
+            data (str): received data from device as a str object.
+
+        Returns:
+            imei (str): parsed IMEI in decimal format.
+    """
+    imei = binascii.unhexlify(data[4:]).decode('utf-8')
+    return imei
+
+def build_gprs_cmd(cmd):
+    """
+    Builds a packet required to send GPRS command to device successfully.
+
+        Parameters:
+            cmd (str): GPRS command to send to the device.
+
+        Returns:
+            packet (str): str representation of bytes of GPRS command and other fields
+            requirerd to send a command.
+    """
+    cmd = binascii.hexlify(cmd.encode('utf-8')).decode('utf-8')
+    four_zeros = '00000000'
+    codec = '0C'
+    no_of_cmds = '01'
+    type_byte = '05' # GPRS cmd to send. 06 would be cmd response received from device.
+    cmd_len = str(int(len(cmd)/2)).zfill(8)
+    packet = codec + no_of_cmds + type_byte + cmd_len + cmd + no_of_cmds
+    packet_len = hex(int(len(packet) / 2))[2:]
+    packet_len = packet_len.zfill(8)
+    full_packet = four_zeros + packet_len + packet
+    packet_bytes = binascii.unhexlify(packet)
+    crc16 = hex(libscrc.ibm(packet_bytes))[2:].zfill(8)
+    full_packet += crc16
+    full_packet = binascii.unhexlify(full_packet)
+    return full_packet
