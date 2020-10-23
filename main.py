@@ -94,21 +94,8 @@ class Server(QtCore.QThread):
         for soc, conn_imei in self.clientmap.items():
             if conn_imei == imei:
                 conn = soc
-        cmd = binascii.hexlify(cmd.encode('utf-8')).decode('utf-8')
-        four_zeros = '00000000'
-        codec = '0C'
-        no_of_cmds = '01'
-        type_byte = '05'
-        cmd_len = str(int(len(cmd)/2)).zfill(8)
-        packet = codec + no_of_cmds + type_byte + cmd_len + cmd + no_of_cmds
-        packet_len = hex(int(len(packet) / 2))[2:]
-        packet_len = packet_len.zfill(8)
-        full_packet = four_zeros + packet_len + packet
-        packet_bytes = binascii.unhexlify(packet)
-        crc16 = hex(libscrc.ibm(packet_bytes))[2:].zfill(8)
-        full_packet += crc16
-        full_packet = binascii.unhexlify(full_packet)
-        self.send(conn, full_packet)
+        packet = parselib.build_gprs_cmd(cmd)
+        self.send(conn, packet)
 
     def communicate(self, conn, addr):
         connected = True
@@ -117,7 +104,7 @@ class Server(QtCore.QThread):
             if not imei:
                 print("Waiting for IMEI...")
                 imei = self.receive(conn, True)
-                imei = binascii.unhexlify(imei[4:]).decode('utf-8')
+                imei = parselib.parse_imei(imei)
                 #imei = '000F383634363036303432333339333234'
                 print(imei)
                 if not imei:
@@ -138,8 +125,7 @@ class Server(QtCore.QThread):
                     data_no = pinfo['no_of_data_1']
                     codec = pinfo['codec']
                     if codec != '0c':
-                        recs = parselib.parse_record_payload(rpayload, data_no, codec)
-                        reply = '0' * (8 - len(data_no)) + data_no
+                        recs, reply = parselib.parse_record_payload(rpayload, data_no, codec)
                         self.received_data.emit(f"{data}")
                         self.received_data.emit(f"Sending record reply: {reply}")
                         self.send(conn, reply)
