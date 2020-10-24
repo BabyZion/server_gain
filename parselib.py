@@ -202,7 +202,6 @@ def build_gprs_cmd(cmd):
     packet_bytes = binascii.unhexlify(packet)
     crc16 = hex(libscrc.ibm(packet_bytes))[2:].zfill(8)
     full_packet += crc16
-    full_packet = binascii.unhexlify(full_packet)
     return full_packet
 
 def parse_gprs_cmd_response(data):
