@@ -20,24 +20,27 @@ class Application(QtWidgets.QMainWindow):
         self.main_window = Ui_MainWindow()
         self.main_window.setupUi(self)
         self.main_window.pushButton.pressed.connect(self.send_gprs_cmd)
+        self.main_window.lineEdit.returnPressed.connect(self.send_gprs_cmd)
         self.show()
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
         self.server = Server(6969)
         self.server.received_data.connect(self.append_text_browser)
-        self.server.new_conn.connect(self.add_imei)
-        self.server.closed_conn.connect(self.del_imei)
+        self.server.new_conn.connect(self.add_conn)
+        self.server.closed_conn.connect(self.del_conn)
         self.server.start()
 
     def append_text_browser(self, data):
         time_recv = datetime.strftime(datetime.now(), self.time_format)
         self.main_window.textBrowser.append(f'[{time_recv}] - {data}')
 
-    def add_imei(self, imei):
+    def add_conn(self, imei):
         self.main_window.comboBox.addItem(imei)
+        self.main_window.labelCount.setText(str(self.server.clients))
     
-    def del_imei(self, imei):
+    def del_conn(self, imei):
         index = self.main_window.comboBox.findText(imei)
         self.main_window.comboBox.removeItem(index)
+        self.main_window.labelCount.setText(str(self.server.clients))
 
     def send_gprs_cmd(self):
         cmd = self.main_window.lineEdit.text() + '\r\n'
