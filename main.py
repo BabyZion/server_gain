@@ -46,6 +46,7 @@ class Application(QtWidgets.QMainWindow):
         cmd = self.main_window.lineEdit.text() + '\r\n'
         imei = self.main_window.comboBox.currentText()
         self.server.send_cmd(cmd, imei)
+        self.append_text_browser(f"Sending GPRS CMD to {imei} - {cmd}")
 
 
 class Server(QtCore.QThread):
