@@ -194,7 +194,7 @@ def build_gprs_cmd(cmd):
     codec = '0C'
     no_of_cmds = '01'
     type_byte = '05' # GPRS cmd to send. 06 would be cmd response received from device.
-    cmd_len = str(int(len(cmd)/2)).zfill(8)
+    cmd_len = hex(int(len(cmd)/2))[2:].zfill(8)
     packet = codec + no_of_cmds + type_byte + cmd_len + cmd + no_of_cmds
     packet_len = hex(int(len(packet) / 2))[2:]
     packet_len = packet_len.zfill(8)
