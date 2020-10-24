@@ -204,3 +204,16 @@ def build_gprs_cmd(cmd):
     full_packet += crc16
     full_packet = binascii.unhexlify(full_packet)
     return full_packet
+
+def parse_gprs_cmd_response(data):
+    """
+    Parses GPRS CMD response from data received.
+
+        Parameters:
+            data (str): received data from device as a str object.
+
+        Returns:
+            response (str): human readable response to GPRS command.
+    """
+    response = binascii.unhexlify(data[10:]).decode('utf-8')
+    return response

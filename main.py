@@ -141,7 +141,8 @@ class Server(QtCore.QThread):
                         self.received_data.emit(f"Sending record reply: {reply}")
                         self.send(conn, reply)
                     else:
-                        self.received_data.emit(f"{binascii.unhexlify(rpayload[10:]).decode('utf-8')}")
+                        response = parselib.parse_gprs_cmd_response(rpayload)
+                        self.received_data.emit(f"{response}")
                 else:
                     connected = False
                     self.clients -= 1
