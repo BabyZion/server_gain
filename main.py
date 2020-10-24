@@ -23,16 +23,21 @@ class Application(QtWidgets.QMainWindow):
         self.show()
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
         self.server = Server(6969)
-        self.server.received_data.connect(self.parse_data)
-        self.server.new_conn.connect(self.update_imei_box)
+        self.server.received_data.connect(self.append_text_browser)
+        self.server.new_conn.connect(self.add_imei)
+        self.server.closed_conn.connect(self.del_imei)
         self.server.start()
 
-    def parse_data(self, data):
+    def append_text_browser(self, data):
         time_recv = datetime.strftime(datetime.now(), self.time_format)
         self.main_window.textBrowser.append(f'[{time_recv}] - {data}')
 
-    def update_imei_box(self, imei):
+    def add_imei(self, imei):
         self.main_window.comboBox.addItem(imei)
+    
+    def del_imei(self, imei):
+        index = self.main_window.comboBox.findText(imei)
+        self.main_window.comboBox.removeItem(index)
 
     def send_gprs_cmd(self):
         cmd = self.main_window.lineEdit.text() + '\r\n'
@@ -44,6 +49,7 @@ class Server(QtCore.QThread):
 
     received_data = QtCore.pyqtSignal(str)
     new_conn = QtCore.pyqtSignal(str)
+    closed_conn = QtCore.pyqtSignal(str)
 
     IMEI_MSG_HEADER = 4
     TCP_MSG_HEADER = 16
@@ -109,6 +115,8 @@ class Server(QtCore.QThread):
                 print(imei)
                 if not imei:
                     connected = False
+                    self.clients -= 1
+                    self.received_data.emit(f"Couldn't establish connection with {addr}")
                 else:
                     self.send(conn, '01')
                 
@@ -133,7 +141,9 @@ class Server(QtCore.QThread):
                         self.received_data.emit(f"{binascii.unhexlify(rpayload[10:]).decode('utf-8')}")
                 else:
                     connected = False
-
+                    self.clients -= 1
+                    self.received_data.emit(f"Connection with {imei} - {addr} closed.")
+                    self.closed_conn.emit(imei)
 
     def run(self):
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
