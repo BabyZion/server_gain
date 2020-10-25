@@ -24,14 +24,11 @@ class Application(QtWidgets.QMainWindow):
         self.main_window.pushButtonStart.pressed.connect(self.start_server)
         self.show()
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
-        self.trans_prot = self.main_window.buttonGroup.checkedButton().text()
-        self.server = Server(6969, self.trans_prot)
+        self.server = Server()
         self.server.received_data.connect(self.append_text_browser)
         self.server.new_conn.connect(self.add_conn)
         self.server.closed_conn.connect(self.del_conn)
-        self.server.start()
-        self.append_text_browser(f"{self.trans_prot} server started.")
-
+        
     def append_text_browser(self, data):
         time_recv = datetime.strftime(datetime.now(), self.time_format)
         self.main_window.textBrowser.append(f'[{time_recv}] - {data}')
@@ -58,7 +55,11 @@ class Application(QtWidgets.QMainWindow):
         self.server.server.close()
 
     def start_server(self):
-        pass
+        trans_prot = self.main_window.buttonGroup.checkedButton().text()
+        port = self.main_window.spinBox.value()
+        self.server.create_socket(port, trans_prot)
+        self.server.start()
+        self.append_text_browser(f"{trans_prot} server started on port {port}.")
 
     def stop_server(self):
         pass
@@ -73,16 +74,21 @@ class Server(QtCore.QThread):
     IMEI_MSG_HEADER = 4
     TCP_MSG_HEADER = 16
 
-    def __init__(self, port, trans_prot):
+    def __init__(self):
         super().__init__()
-        self.host = '0.0.0.0'
-        self.port = int(port)
-        self.username = "SERVER"
-        self.trans_prot = trans_prot
         self.clients = 0
         self.clientmap = {}
         self.conn_threads = []
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
+
+    def create_socket(self, port, trans_prot):
+        self.host = '0.0.0.0'
+        self.port = int(port)
+        self.username = "SERVER"
+        self.trans_prot = trans_prot
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server.bind((self.host, self.port))
 
     def receive(self, channel, imei=False):
         full_msg = ''
@@ -167,11 +173,7 @@ class Server(QtCore.QThread):
                     self.closed_conn.emit(imei)
 
     def run(self):
-        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server.bind((self.host, self.port))
-        self.socket_list = [self.server]
-        self.server.listen(5)
+        self.server.listen()
         running = True
         while running:
             conn, addr = self.server.accept()
