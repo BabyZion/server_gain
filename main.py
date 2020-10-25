@@ -19,15 +19,18 @@ class Application(QtWidgets.QMainWindow):
         super().__init__()
         self.main_window = Ui_MainWindow()
         self.main_window.setupUi(self)
-        self.main_window.pushButton.pressed.connect(self.send_gprs_cmd)
+        self.main_window.pushButtonSend.pressed.connect(self.send_gprs_cmd)
         self.main_window.lineEdit.returnPressed.connect(self.send_gprs_cmd)
+        self.main_window.pushButtonStart.pressed.connect(self.start_server)
         self.show()
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
-        self.server = Server(6969)
+        self.trans_prot = self.main_window.buttonGroup.checkedButton().text()
+        self.server = Server(6969, self.trans_prot)
         self.server.received_data.connect(self.append_text_browser)
         self.server.new_conn.connect(self.add_conn)
         self.server.closed_conn.connect(self.del_conn)
         self.server.start()
+        self.append_text_browser(f"{self.trans_prot} server started.")
 
     def append_text_browser(self, data):
         time_recv = datetime.strftime(datetime.now(), self.time_format)
@@ -48,6 +51,18 @@ class Application(QtWidgets.QMainWindow):
         self.server.send_cmd(cmd, imei)
         self.append_text_browser(f"Sending GPRS CMD to {imei} - {cmd}")
 
+    def change_server_type(self):
+        ser_type = self.sender().text()
+        self.trans_prot = ser_type
+        self.server.server.shutdown(socket.SHUT_RDWR)
+        self.server.server.close()
+
+    def start_server(self):
+        pass
+
+    def stop_server(self):
+        pass
+
 
 class Server(QtCore.QThread):
 
@@ -58,11 +73,12 @@ class Server(QtCore.QThread):
     IMEI_MSG_HEADER = 4
     TCP_MSG_HEADER = 16
 
-    def __init__(self, port):
+    def __init__(self, port, trans_prot):
         super().__init__()
         self.host = '0.0.0.0'
         self.port = int(port)
         self.username = "SERVER"
+        self.trans_prot = trans_prot
         self.clients = 0
         self.clientmap = {}
         self.conn_threads = []
