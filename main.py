@@ -55,15 +55,39 @@ class Application(QtWidgets.QMainWindow):
         self.server.server.close()
 
     def start_server(self):
-        trans_prot = self.main_window.buttonGroup.checkedButton().text()
-        port = self.main_window.spinBox.value()
-        self.server.create_socket(port, trans_prot)
+        self.trans_prot = self.main_window.buttonGroup.checkedButton().text()
+        self.port = self.main_window.spinBox.value()
+        self.__change_server_widget_state(self.main_window.horizontalLayout_3)
+        self.__inverse_start_stop_button('stop')
+        self.server.create_socket(self.port, self.trans_prot)
         self.server.start()
-        self.append_text_browser(f"{trans_prot} server started on port {port}.")
+        self.append_text_browser(f"{self.trans_prot} server started on port {self.port}.")
 
     def stop_server(self):
-        pass
+        self.server.server.shutdown(socket.SHUT_RDWR)
+        self.server.server.close()
+        self.__change_server_widget_state(self.main_window.horizontalLayout_3)
+        self.__inverse_start_stop_button('start')
+        self.append_text_browser(f"{self.trans_prot} server on port {self.port} was closed with all it's connections.")
 
+    def __change_server_widget_state(self, layout):
+        cnt = layout.count()
+        for i in range(cnt):
+            widget = layout.itemAt(i).widget()
+            if widget.isEnabled():
+                widget.setEnabled(False)
+            else:
+                widget.setEnabled(True)
+
+    def __inverse_start_stop_button(self, state):
+        self.main_window.pushButtonStart.setEnabled(True)
+        self.main_window.pushButtonStart.disconnect()
+        if state == 'start':
+            self.main_window.pushButtonStart.setText('START')
+            self.main_window.pushButtonStart.pressed.connect(self.start_server)
+        elif state == 'stop':
+            self.main_window.pushButtonStart.setText('STOP')
+            self.main_window.pushButtonStart.pressed.connect(self.stop_server)
 
 class Server(QtCore.QThread):
 
@@ -176,12 +200,19 @@ class Server(QtCore.QThread):
         self.server.listen()
         running = True
         while running:
-            conn, addr = self.server.accept()
-            print(f"Connected from {addr}")
-            t = threading.Thread(target=self.communicate, args=[conn, addr])
-            self.conn_threads.append(t)
-            t.start()
-            self.clients += 1
+            try:
+                conn, addr = self.server.accept()
+                print(f"Connected from {addr}")
+                t = threading.Thread(target=self.communicate, args=[conn, addr])
+                self.conn_threads.append(t)
+                t.start()
+                self.clients += 1
+            except OSError as e:
+                print(f"{e} - Server thread is closing")
+                for imei, conn in self.clientmap.items():
+                    conn.shutdown(socket.SHUT_RDWR)
+                    conn.close()
+                running = False
             
 
 if __name__ == '__main__':
