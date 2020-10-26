@@ -208,10 +208,12 @@ class Server(QtCore.QThread):
                 t.start()
                 self.clients += 1
             except OSError as e:
+                # OSError can be raised if user tries to STOP the server.
                 print(f"{e} - Server thread is closing")
-                for imei, conn in self.clientmap.items():
+                for conn, imei in self.clientmap.items():
                     conn.shutdown(socket.SHUT_RDWR)
                     conn.close()
+                self.clientmap = {}
                 running = False
             
 
