@@ -154,7 +154,10 @@ class Server(QtCore.QThread):
             if conn_imei == imei:
                 conn = soc
         packet = parselib.build_gprs_cmd(cmd)
-        self.send(conn, packet)
+        if self.trans_prot == 'TCP':
+            self.send(conn, packet)
+        elif self.trans_prot == 'UDP':
+            self.server.sendto(binascii.unhexlify(packet), conn)
 
     def accept_new_connection(self, imei, conn_entity):
         if not self.clientmap.get(imei):
@@ -196,7 +199,7 @@ class Server(QtCore.QThread):
                     codec = pinfo['codec']
                     if codec != '0c':
                         recs = parselib.parse_record_payload(rpayload, data_no, codec)
-                        self.received_data.emit(f"{data}")
+                        self.received_data.emit(f"IMEI: {imei} - {data}")
                         self.received_data.emit(f"Sending record reply: {reply}")
                         self.send(conn, reply)
                     else:
@@ -213,7 +216,6 @@ class Server(QtCore.QThread):
         running = True
         while running:
             try:
-                print(self.trans_prot)
                 conn, addr = self.server.accept()
                 print(f"Connected from {addr}")
                 t = threading.Thread(target=self.communicate, args=[conn, addr])
@@ -236,11 +238,18 @@ class Server(QtCore.QThread):
                 data = str(binascii.hexlify(data))[2:-1]
                 packet = (datetime.now(), data)
                 pinfo, reply = parselib.parse_packet(packet)
-                imei = parselib.parse_imei(pinfo['imei'], False)
-                self.accept_new_connection(imei, addr)
-                self.received_data.emit(f"IMEI: {imei} - {data}")
-                self.received_data.emit(f"Sending record reply: {reply}")
-                self.server.sendto(binascii.unhexlify(reply), addr)
+                rpayload = pinfo['records']
+                data_no = pinfo['no_of_data_1']
+                codec = pinfo['codec']
+                if codec != '0c':
+                    imei = parselib.parse_imei(pinfo['imei'], False)
+                    self.accept_new_connection(imei, addr)
+                    self.received_data.emit(f"IMEI: {imei} - {data}")
+                    self.received_data.emit(f"Sending record reply: {reply}")
+                    self.server.sendto(binascii.unhexlify(reply), addr)
+                else:
+                    response = parselib.parse_gprs_cmd_response(rpayload)
+                    self.received_data.emit(f"{response}")
 
     def run(self):
         if self.trans_prot == 'TCP':
