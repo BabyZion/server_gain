@@ -110,7 +110,10 @@ class Server(QtCore.QThread):
         self.port = int(port)
         self.username = "SERVER"
         self.trans_prot = trans_prot
-        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if self.trans_prot == 'TCP':
+            self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        elif self.trans_prot == 'UDP':
+            self.server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server.bind((self.host, self.port))
 
@@ -159,7 +162,7 @@ class Server(QtCore.QThread):
         while connected:
             if not imei:
                 print("Waiting for IMEI...")
-                imei = self.receive(conn, True)
+                imei = self.receive_tcp(conn, True)
                 imei = parselib.parse_imei(imei)
                 #imei = '000F383634363036303432333339333234'
                 print(imei)
@@ -170,20 +173,19 @@ class Server(QtCore.QThread):
                 else:
                     self.send(conn, '01')
                 
-                    self.clientmap[conn] = imei
-                    self.new_conn.emit(imei)
+                    self.accept_new_connection(conn, imei)
                     self.received_data.emit(f"Connected from: {addr}. IMEI: {imei}\n")
             else:
                 data = self.receive(conn)
                 print(data)
                 if data:
                     packet = (datetime.now(), data)
-                    pinfo = parselib.parse_packet(packet)
+                    pinfo, reply = parselib.parse_packet(packet)
                     rpayload = pinfo['records']
                     data_no = pinfo['no_of_data_1']
                     codec = pinfo['codec']
                     if codec != '0c':
-                        recs, reply = parselib.parse_record_payload(rpayload, data_no, codec)
+                        recs = parselib.parse_record_payload(rpayload, data_no, codec)
                         self.received_data.emit(f"{data}")
                         self.received_data.emit(f"Sending record reply: {reply}")
                         self.send(conn, reply)
@@ -196,17 +198,16 @@ class Server(QtCore.QThread):
                     self.received_data.emit(f"Connection with {imei} - {addr} closed.")
                     self.closed_conn.emit(imei)
 
-    def run(self):
+    def run_tcp_server(self):
         self.server.listen()
         running = True
         while running:
             try:
                 conn, addr = self.server.accept()
                 print(f"Connected from {addr}")
-                t = threading.Thread(target=self.communicate, args=[conn, addr])
+                t = threading.Thread(target=self.communicate_tcp, args=[conn, addr])
                 self.conn_threads.append(t)
                 t.start()
-                self.clients += 1
             except OSError as e:
                 # OSError can be raised if user tries to STOP the server.
                 print(f"{e} - Server thread is closing")
@@ -215,6 +216,26 @@ class Server(QtCore.QThread):
                     conn.close()
                 self.clientmap = {}
                 running = False
+
+    def run_udp_server(self):
+        while True:
+            data, addr = self.server.recvfrom(1500)
+            if data:
+                self.received_data.emit(f"Received UDP packet from {addr}.")
+                data = str(binascii.hexlify(data))[2:-1]
+                packet = (datetime.now(), data)
+                pinfo, reply = parselib.parse_packet(packet)
+                imei = parselib.parse_imei(pinfo['imei'], False)
+                self.accept_new_connection(addr[0], imei)
+                self.received_data.emit(f"IMEI: {imei} - {data}")
+                self.received_data.emit(f"Sending record reply: {reply}")
+                self.server.sendto(binascii.unhexlify(reply), addr)
+
+    def run(self):
+        if self.trans_prot == 'TCP':
+            self.run_tcp_server()
+        elif self.trans_prot == 'UDP':
+            self.run_udp_server()
             
 
 if __name__ == '__main__':

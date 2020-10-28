@@ -45,12 +45,12 @@ def parse_packet(packet):
             packet_info (dict): a dict with various parts of data packet.
     """
     time_received, packet = packet
-    if packet[4:8] == 'CAFE':
-        packet_info = __parse_udp_packet(packet)
+    if packet[4:8].upper() == 'CAFE':
+        packet_info, reply = __parse_udp_packet(packet)
     else:
-        packet_info = __parse_tcp_packet(packet)
+        packet_info, reply = __parse_tcp_packet(packet)
     packet_info['time_received'] = time_received
-    return packet_info
+    return packet_info, reply
 
 def parse_date(log):
     """
@@ -87,7 +87,8 @@ def __parse_tcp_packet(packet):
     crc_16 = rest_of_packet
     packet_info = {'protocol':'TCP', 'zeros':zeros, 'data_length':data_length, 'codec':codec,
         'no_of_data_1':no_of_data_1, 'records':records, 'no_of_data_2':no_of_data_2, 'crc_16':crc_16}
-    return packet_info
+    reply = build_record_reply(packet_info['protocol'], no_of_data_1)
+    return packet_info, reply
     
 def __parse_udp_packet(packet):
     """
@@ -113,7 +114,8 @@ def __parse_udp_packet(packet):
     packet_info = {'protocol':'UDP', 'data_length':data_length, 'identification':identification, 'not_used':not_used,
         'packet_id':packet_id, 'imei_len':imei_len, 'imei':imei, 'codec':codec,
             'no_of_data_1':no_of_data_1, 'records':records, 'no_of_data_2':no_of_data_2}
-    return packet_info
+    reply = build_record_reply(packet_info['protocol'], no_of_data_1, packet_id)
+    return packet_info, reply
 
 def parse_record_payload(record_payload, no_of_records, codec='08'):
     """
@@ -162,10 +164,9 @@ def parse_record_payload(record_payload, no_of_records, codec='08'):
                 record[avl_id] = value
         recs_parsed += 1
         records.append(record)
-        reply = '0' * (8 - len(no_of_records_hex)) + no_of_records_hex
-    return records, reply
+    return records
 
-def parse_imei(data):
+def parse_imei(data, wlen=True):
     """
     Parses IMEI from data received while establishing connection.
 
@@ -175,7 +176,8 @@ def parse_imei(data):
         Returns:
             imei (str): parsed IMEI in decimal format.
     """
-    imei = binascii.unhexlify(data[4:]).decode('utf-8')
+    imei_hex = data[4:] if wlen else data
+    imei = binascii.unhexlify(data).decode('utf-8')
     return imei
 
 def build_gprs_cmd(cmd):
@@ -216,3 +218,17 @@ def parse_gprs_cmd_response(data):
     """
     response = binascii.unhexlify(data[10:]).decode('utf-8')
     return response
+
+def build_record_reply(protocol, no_of_recs, packet_id=None):
+    """
+    Builds reply of record packet received.
+
+        Parameters:
+            protocol (str): transport protocol of received packet.
+            no_of_recs (int): number of records in data packet.
+            packet_id (str): UDP packet id.
+    """
+    if protocol == 'TCP':
+        return '0' * (8 - len(no_of_recs)) + no_of_recs
+    elif protocol == 'UDP':
+        return '0' * (14 - len(no_of_recs + packet_id)) + packet_id + no_of_recs
