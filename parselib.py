@@ -177,7 +177,7 @@ def parse_imei(data, wlen=True):
             imei (str): parsed IMEI in decimal format.
     """
     imei_hex = data[4:] if wlen else data
-    imei = binascii.unhexlify(data).decode('utf-8')
+    imei = binascii.unhexlify(imei_hex).decode('utf-8')
     return imei
 
 def build_gprs_cmd(cmd):

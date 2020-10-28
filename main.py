@@ -101,7 +101,7 @@ class Server(QtCore.QThread):
     def __init__(self):
         super().__init__()
         self.clients = 0
-        self.clientmap = {}
+        self.clientmap = {} # clientmap[imei] = conn_entity (socket or tuple of addr and port)
         self.conn_threads = []
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
 
@@ -150,11 +150,21 @@ class Server(QtCore.QThread):
         channel.send(msg)
 
     def send_cmd(self, cmd, imei):
-        for soc, conn_imei in self.clientmap.items():
+        for conn_imei, soc in self.clientmap.items():
             if conn_imei == imei:
                 conn = soc
         packet = parselib.build_gprs_cmd(cmd)
         self.send(conn, packet)
+
+    def accept_new_connection(self, imei, conn_entity):
+        if not self.clientmap.get(imei):
+            # Add IMEI and conn_entity to clientmap.
+            self.clientmap[imei] = conn_entity
+            self.clients += 1
+            self.new_conn.emit(imei)
+        else:
+            # Update clientmap with received conn_entity (UDP entity might change).
+            self.clientmap[imei] = conn_entity
 
     def communicate(self, conn, addr):
         connected = True
@@ -162,7 +172,7 @@ class Server(QtCore.QThread):
         while connected:
             if not imei:
                 print("Waiting for IMEI...")
-                imei = self.receive_tcp(conn, True)
+                imei = self.receive(conn, True)
                 imei = parselib.parse_imei(imei)
                 #imei = '000F383634363036303432333339333234'
                 print(imei)
@@ -173,7 +183,7 @@ class Server(QtCore.QThread):
                 else:
                     self.send(conn, '01')
                 
-                    self.accept_new_connection(conn, imei)
+                    self.accept_new_connection(imei, conn)
                     self.received_data.emit(f"Connected from: {addr}. IMEI: {imei}\n")
             else:
                 data = self.receive(conn)
@@ -203,15 +213,16 @@ class Server(QtCore.QThread):
         running = True
         while running:
             try:
+                print(self.trans_prot)
                 conn, addr = self.server.accept()
                 print(f"Connected from {addr}")
-                t = threading.Thread(target=self.communicate_tcp, args=[conn, addr])
+                t = threading.Thread(target=self.communicate, args=[conn, addr])
                 self.conn_threads.append(t)
                 t.start()
             except OSError as e:
                 # OSError can be raised if user tries to STOP the server.
                 print(f"{e} - Server thread is closing")
-                for conn, imei in self.clientmap.items():
+                for _, conn in self.clientmap.items():
                     conn.shutdown(socket.SHUT_RDWR)
                     conn.close()
                 self.clientmap = {}
@@ -226,7 +237,7 @@ class Server(QtCore.QThread):
                 packet = (datetime.now(), data)
                 pinfo, reply = parselib.parse_packet(packet)
                 imei = parselib.parse_imei(pinfo['imei'], False)
-                self.accept_new_connection(addr[0], imei)
+                self.accept_new_connection(imei, addr)
                 self.received_data.emit(f"IMEI: {imei} - {data}")
                 self.received_data.emit(f"Sending record reply: {reply}")
                 self.server.sendto(binascii.unhexlify(reply), addr)
