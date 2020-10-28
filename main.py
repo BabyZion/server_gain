@@ -210,6 +210,7 @@ class Server(QtCore.QThread):
                     self.clients -= 1
                     self.received_data.emit(f"Connection with {imei} - {addr} closed.")
                     self.closed_conn.emit(imei)
+                    del self.clientmap[imei]
 
     def run_tcp_server(self):
         self.server.listen()
