@@ -23,6 +23,7 @@ class Application(QtWidgets.QMainWindow):
         self.main_window.lineEdit.returnPressed.connect(self.send_gprs_cmd)
         self.main_window.pushButtonStart.pressed.connect(self.start_server)
         self.main_window.checkBox.toggled.connect(self.auto_sending)
+        self.__change_server_widget_state(self.main_window.horizontalLayout_2)
         self.show()
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
         self.server = Server()
@@ -58,6 +59,7 @@ class Application(QtWidgets.QMainWindow):
         self.trans_prot = self.main_window.buttonGroup.checkedButton().text()
         self.port = self.main_window.spinBox.value()
         self.__change_server_widget_state(self.main_window.horizontalLayout_3)
+        self.__change_server_widget_state(self.main_window.horizontalLayout_2)
         self.__inverse_start_stop_button('stop')
         self.server.create_socket(self.port, self.trans_prot)
         self.server.start()
@@ -65,7 +67,10 @@ class Application(QtWidgets.QMainWindow):
 
     def stop_server(self):
         self.server.close()
+        if self.main_window.checkBox.isChecked():
+            self.main_window.checkBox.setChecked(False)
         self.__change_server_widget_state(self.main_window.horizontalLayout_3)
+        self.__change_server_widget_state(self.main_window.horizontalLayout_2)
         self.__inverse_start_stop_button('start')
         self.append_text_browser(f"{self.trans_prot} server on port {self.port} was closed with all it's connections.")
 
@@ -78,6 +83,9 @@ class Application(QtWidgets.QMainWindow):
             self.send_gprs_cmd()
         else:
             self.server.stop_auto_sending()
+        self.main_window.pushButtonSend.setEnabled(not checked)
+        self.main_window.spinBoxSeconds.setEnabled(not checked)
+        self.main_window.lineEdit.setEnabled(not checked)
 
     def __change_server_widget_state(self, layout):
         cnt = layout.count()
@@ -188,7 +196,7 @@ class Server(QtCore.QThread):
             self.auto_thread.start()
     
     def stop_auto_sending(self):
-        self.auto_thread.cancel()
+        if self.auto_thread: self.auto_thread.cancel()
         self.auto_thread = None
         self.received_data.emit(f"Automatic GPRS CMD SENDING stopped.")
 
