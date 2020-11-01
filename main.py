@@ -64,8 +64,7 @@ class Application(QtWidgets.QMainWindow):
         self.append_text_browser(f"{self.trans_prot} server started on port {self.port}.")
 
     def stop_server(self):
-        self.server.server.shutdown(socket.SHUT_RDWR)
-        self.server.server.close()
+        self.server.close()
         self.__change_server_widget_state(self.main_window.horizontalLayout_3)
         self.__inverse_start_stop_button('start')
         self.append_text_browser(f"{self.trans_prot} server on port {self.port} was closed with all it's connections.")
@@ -97,6 +96,7 @@ class Server(QtCore.QThread):
 
     IMEI_MSG_HEADER = 4
     TCP_MSG_HEADER = 16
+    UDP_END_PACKET = bytes(b'\x00\x00\x00\x00')
 
     def __init__(self):
         super().__init__()
@@ -104,6 +104,7 @@ class Server(QtCore.QThread):
         self.clientmap = {} # clientmap[imei] = conn_entity (socket or tuple of addr and port)
         self.conn_threads = []
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
+        self.running = False
 
     def create_socket(self, port, trans_prot):
         self.host = '0.0.0.0'
@@ -169,6 +170,18 @@ class Server(QtCore.QThread):
             # Update clientmap with received conn_entity (UDP entity might change).
             self.clientmap[imei] = conn_entity
 
+    def close(self):
+        if self.trans_prot == 'TCP':
+            self.server.shutdown(socket.SHUT_RDWR)
+            self.server.close()
+        elif self.trans_prot == 'UDP':
+            self.server.sendto(self.UDP_END_PACKET, ('127.0.0.1', self.port))
+            self.clients = 0
+            for imei in self.clientmap:
+                self.closed_conn.emit(imei)
+            self.clientmap = {}
+        self.running = False
+
     def communicate(self, conn, addr):
         connected = True
         imei = None
@@ -197,12 +210,12 @@ class Server(QtCore.QThread):
                     rpayload = pinfo['records']
                     data_no = pinfo['no_of_data_1']
                     codec = pinfo['codec']
-                    if codec != '0c':
+                    if codec == '08' or codec == '8e':
                         recs = parselib.parse_record_payload(rpayload, data_no, codec)
                         self.received_data.emit(f"IMEI: {imei} - {data}")
                         self.received_data.emit(f"Sending record reply: {reply}")
                         self.send(conn, reply)
-                    else:
+                    elif codec == '0c':
                         response = parselib.parse_gprs_cmd_response(rpayload)
                         self.received_data.emit(f"{response}")
                 else:
@@ -214,8 +227,8 @@ class Server(QtCore.QThread):
 
     def run_tcp_server(self):
         self.server.listen()
-        running = True
-        while running:
+        self.running = True
+        while self.running:
             try:
                 conn, addr = self.server.accept()
                 print(f"Connected from {addr}")
@@ -228,29 +241,32 @@ class Server(QtCore.QThread):
                 for _, conn in self.clientmap.items():
                     conn.shutdown(socket.SHUT_RDWR)
                     conn.close()
-                self.clientmap = {}
-                running = False
+                self.running = False
 
     def run_udp_server(self):
-        while True:
+        self.running = True
+        while self.running:
             data, addr = self.server.recvfrom(1500)
             if data:
-                self.received_data.emit(f"Received UDP packet from {addr}.")
+                if addr[0] != ('127.0.0.1'): self.received_data.emit(f"Received UDP packet from {addr}.")
                 data = str(binascii.hexlify(data))[2:-1]
-                packet = (datetime.now(), data)
-                pinfo, reply = parselib.parse_packet(packet)
-                rpayload = pinfo['records']
-                data_no = pinfo['no_of_data_1']
-                codec = pinfo['codec']
-                if codec != '0c':
-                    imei = parselib.parse_imei(pinfo['imei'], False)
-                    self.accept_new_connection(imei, addr)
-                    self.received_data.emit(f"IMEI: {imei} - {data}")
-                    self.received_data.emit(f"Sending record reply: {reply}")
-                    self.server.sendto(binascii.unhexlify(reply), addr)
+                if data == '00000000':
+                    self.server.close()
                 else:
-                    response = parselib.parse_gprs_cmd_response(rpayload)
-                    self.received_data.emit(f"{response}")
+                    packet = (datetime.now(), data)
+                    pinfo, reply = parselib.parse_packet(packet)
+                    rpayload = pinfo['records']
+                    data_no = pinfo['no_of_data_1']
+                    codec = pinfo['codec']
+                    if codec != '0c':
+                        imei = parselib.parse_imei(pinfo['imei'], False)
+                        self.accept_new_connection(imei, addr)
+                        self.received_data.emit(f"IMEI: {imei} - {data}")
+                        self.received_data.emit(f"Sending record reply: {reply}")
+                        self.server.sendto(binascii.unhexlify(reply), addr)
+                    else:
+                        response = parselib.parse_gprs_cmd_response(rpayload)
+                        self.received_data.emit(f"{response}")
 
     def run(self):
         if self.trans_prot == 'TCP':
