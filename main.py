@@ -177,6 +177,7 @@ class Server(QtCore.QThread):
                     self.send(conn, packet)
                 elif self.trans_prot == 'UDP':
                     self.server.sendto(binascii.unhexlify(packet), conn)
+                    conn = None
             except BrokenPipeError as e:
                 conn = None
                 self.received_data.emit(f"Could not send GPRS CMD - {e}.")
