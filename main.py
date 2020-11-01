@@ -22,6 +22,7 @@ class Application(QtWidgets.QMainWindow):
         self.main_window.pushButtonSend.pressed.connect(self.send_gprs_cmd)
         self.main_window.lineEdit.returnPressed.connect(self.send_gprs_cmd)
         self.main_window.pushButtonStart.pressed.connect(self.start_server)
+        self.main_window.checkBox.toggled.connect(self.auto_sending)
         self.show()
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
         self.server = Server()
@@ -46,7 +47,6 @@ class Application(QtWidgets.QMainWindow):
         cmd = self.main_window.lineEdit.text() + '\r\n'
         imei = self.main_window.comboBox.currentText()
         self.server.send_cmd(cmd, imei)
-        self.append_text_browser(f"Sending GPRS CMD to {imei} - {cmd}")
 
     def change_server_type(self):
         ser_type = self.sender().text()
@@ -69,6 +69,16 @@ class Application(QtWidgets.QMainWindow):
         self.__inverse_start_stop_button('start')
         self.append_text_browser(f"{self.trans_prot} server on port {self.port} was closed with all it's connections.")
 
+    def auto_sending(self):
+        checked = self.main_window.checkBox.isChecked()
+        period = self.main_window.spinBoxSeconds.value()
+        self.server.automatic = checked
+        self.server.automatic_period = period
+        if checked:
+            self.send_gprs_cmd()
+        else:
+            self.server.stop_auto_sending()
+
     def __change_server_widget_state(self, layout):
         cnt = layout.count()
         for i in range(cnt):
@@ -88,6 +98,7 @@ class Application(QtWidgets.QMainWindow):
             self.main_window.pushButtonStart.setText('STOP')
             self.main_window.pushButtonStart.pressed.connect(self.stop_server)
 
+
 class Server(QtCore.QThread):
 
     received_data = QtCore.pyqtSignal(str)
@@ -105,6 +116,9 @@ class Server(QtCore.QThread):
         self.conn_threads = []
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
         self.running = False
+        self.automatic = None
+        self.automatic_period = None
+        self.auto_thread = None
         self.lock = threading.Lock()
 
     def create_socket(self, port, trans_prot):
@@ -151,15 +165,31 @@ class Server(QtCore.QThread):
         if isinstance(msg, str): msg = binascii.unhexlify(msg)
         channel.send(msg)
 
-    def send_cmd(self, cmd, imei):
-        for conn_imei, soc in self.clientmap.items():
-            if conn_imei == imei:
-                conn = soc
-        packet = parselib.build_gprs_cmd(cmd)
-        if self.trans_prot == 'TCP':
-            self.send(conn, packet)
-        elif self.trans_prot == 'UDP':
-            self.server.sendto(binascii.unhexlify(packet), conn)
+    def send_cmd(self, cmd, imei, conn=None):
+        if not conn:
+            for conn_imei, soc in self.clientmap.items():
+                if conn_imei == imei:
+                    conn = soc
+        if conn:
+            packet = parselib.build_gprs_cmd(cmd)
+            try:
+                if self.trans_prot == 'TCP':
+                    self.send(conn, packet)
+                elif self.trans_prot == 'UDP':
+                    self.server.sendto(binascii.unhexlify(packet), conn)
+            except BrokenPipeError as e:
+                conn = None
+                self.received_data.emit(f"Could not send GPRS CMD - {e}.")
+            self.received_data.emit(f"Sending GPRS CMD to {imei} - {cmd}")
+        if self.automatic:
+            self.received_data.emit(f"Scheduling GPRS CMD SENDING in {self.automatic_period} seconds.")
+            self.auto_thread = threading.Timer(self.automatic_period, self.send_cmd, [cmd, imei, conn])
+            self.auto_thread.start()
+    
+    def stop_auto_sending(self):
+        self.auto_thread.cancel()
+        self.auto_thread = None
+        self.received_data.emit(f"Automatic GPRS CMD SENDING stopped.")
 
     def accept_new_connection(self, imei, conn_entity):
         if not self.clientmap.get(imei):
