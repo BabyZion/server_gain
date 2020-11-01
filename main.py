@@ -105,6 +105,7 @@ class Server(QtCore.QThread):
         self.conn_threads = []
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
         self.running = False
+        self.lock = threading.Lock()
 
     def create_socket(self, port, trans_prot):
         self.host = '0.0.0.0'
@@ -163,7 +164,8 @@ class Server(QtCore.QThread):
     def accept_new_connection(self, imei, conn_entity):
         if not self.clientmap.get(imei):
             # Add IMEI and conn_entity to clientmap.
-            self.clientmap[imei] = conn_entity
+            with self.lock:
+                self.clientmap[imei] = conn_entity
             self.clients += 1
             self.new_conn.emit(imei)
         else:
@@ -179,7 +181,8 @@ class Server(QtCore.QThread):
             self.clients = 0
             for imei in self.clientmap:
                 self.closed_conn.emit(imei)
-            self.clientmap = {}
+            with self.lock:
+                self.clientmap = {}
         self.running = False
 
     def communicate(self, conn, addr):
@@ -223,7 +226,8 @@ class Server(QtCore.QThread):
                     self.clients -= 1
                     self.received_data.emit(f"Connection with {imei} - {addr} closed.")
                     self.closed_conn.emit(imei)
-                    del self.clientmap[imei]
+                    with self.lock:
+                        del self.clientmap[imei]
 
     def run_tcp_server(self):
         self.server.listen()
