@@ -27,7 +27,7 @@ class Application(QtWidgets.QMainWindow):
         self.show()
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
         self.server = Server()
-        self.server.received_data.connect(self.append_text_browser)
+        self.server.display_info.connect(self.append_text_browser)
         self.server.new_conn.connect(self.add_conn)
         self.server.closed_conn.connect(self.del_conn)
         
@@ -109,7 +109,7 @@ class Application(QtWidgets.QMainWindow):
 
 class Server(QtCore.QThread):
 
-    received_data = QtCore.pyqtSignal(str)
+    display_info = QtCore.pyqtSignal(str)
     new_conn = QtCore.pyqtSignal(str)
     closed_conn = QtCore.pyqtSignal(str)
 
@@ -188,17 +188,17 @@ class Server(QtCore.QThread):
                     conn = None
             except BrokenPipeError as e:
                 conn = None
-                self.received_data.emit(f"Could not send GPRS CMD - {e}.")
-            self.received_data.emit(f"Sending GPRS CMD to {imei} - {cmd}")
+                self.display_info.emit(f"Could not send GPRS CMD - {e}.")
+            self.display_info.emit(f"Sending GPRS CMD to {imei} - {cmd}")
         if self.automatic:
-            self.received_data.emit(f"Scheduling GPRS CMD SENDING in {self.automatic_period} seconds.")
+            self.display_info.emit(f"Scheduling GPRS CMD SENDING in {self.automatic_period} seconds.")
             self.auto_thread = threading.Timer(self.automatic_period, self.send_cmd, [cmd, imei, conn])
             self.auto_thread.start()
     
     def stop_auto_sending(self):
         if self.auto_thread: self.auto_thread.cancel()
         self.auto_thread = None
-        self.received_data.emit(f"Automatic GPRS CMD SENDING stopped.")
+        self.display_info.emit(f"Automatic GPRS CMD SENDING stopped.")
 
     def accept_new_connection(self, imei, conn_entity):
         if not self.clientmap.get(imei):
@@ -237,12 +237,12 @@ class Server(QtCore.QThread):
                 if not imei:
                     connected = False
                     self.clients -= 1
-                    self.received_data.emit(f"Couldn't establish connection with {addr}")
+                    self.display_info.emit(f"Couldn't establish connection with {addr}")
                 else:
                     self.send(conn, '01')
                 
                     self.accept_new_connection(imei, conn)
-                    self.received_data.emit(f"Connected from: {addr}. IMEI: {imei}\n")
+                    self.display_info.emit(f"Connected from: {addr}. IMEI: {imei}\n")
             else:
                 data = self.receive(conn)
                 print(data)
@@ -254,16 +254,16 @@ class Server(QtCore.QThread):
                     codec = pinfo['codec']
                     if codec == '08' or codec == '8e':
                         recs = parselib.parse_record_payload(rpayload, data_no, codec)
-                        self.received_data.emit(f"IMEI: {imei} - {data}")
-                        self.received_data.emit(f"Sending record reply: {reply}")
+                        self.display_info.emit(f"IMEI: {imei} - {data}")
+                        self.display_info.emit(f"Sending record reply: {reply}")
                         self.send(conn, reply)
                     elif codec == '0c':
                         response = parselib.parse_gprs_cmd_response(rpayload)
-                        self.received_data.emit(f"{response}")
+                        self.display_info.emit(f"{response}")
                 else:
                     connected = False
                     self.clients -= 1
-                    self.received_data.emit(f"Connection with {imei} - {addr} closed.")
+                    self.display_info.emit(f"Connection with {imei} - {addr} closed.")
                     self.closed_conn.emit(imei)
                     with self.lock:
                         del self.clientmap[imei]
@@ -291,7 +291,7 @@ class Server(QtCore.QThread):
         while self.running:
             data, addr = self.server.recvfrom(1500)
             if data:
-                if addr[0] != ('127.0.0.1'): self.received_data.emit(f"Received UDP packet from {addr}.")
+                if addr[0] != ('127.0.0.1'): self.display_info.emit(f"Received UDP packet from {addr}.")
                 data = str(binascii.hexlify(data))[2:-1]
                 if data == '00000000':
                     self.server.close()
@@ -304,12 +304,12 @@ class Server(QtCore.QThread):
                     if codec != '0c':
                         imei = parselib.parse_imei(pinfo['imei'], False)
                         self.accept_new_connection(imei, addr)
-                        self.received_data.emit(f"IMEI: {imei} - {data}")
-                        self.received_data.emit(f"Sending record reply: {reply}")
+                        self.display_info.emit(f"IMEI: {imei} - {data}")
+                        self.display_info.emit(f"Sending record reply: {reply}")
                         self.server.sendto(binascii.unhexlify(reply), addr)
                     else:
                         response = parselib.parse_gprs_cmd_response(rpayload)
-                        self.received_data.emit(f"{response}")
+                        self.display_info.emit(f"{response}")
 
     def run(self):
         if self.trans_prot == 'TCP':
