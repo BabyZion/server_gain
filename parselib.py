@@ -153,7 +153,7 @@ def parse_record_payload(record_payload, no_of_records, codec='08'):
                 avl_id, rest_of_payload = rest_of_payload[:2*mx], rest_of_payload[2*mx:]
                 value, rest_of_payload = rest_of_payload[:value_len], rest_of_payload[value_len:]
                 record[avl_id] = value
-        if codec == '8E':
+        if codec == '8e':
             no_of_elements_x_byte, rest_of_payload = rest_of_payload[:2*mx], rest_of_payload[2*mx:]
             no_of_elements_x_byte = int(no_of_elements_x_byte, 16)
             for _ in range(no_of_elements_x_byte):
