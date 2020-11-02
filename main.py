@@ -8,6 +8,7 @@ import time
 import threading
 import binascii
 import libscrc
+from logger import Logger
 from datetime import datetime
 from PyQt5 import QtWidgets, QtCore, Qt
 from window import Ui_MainWindow
@@ -32,6 +33,8 @@ class Application(QtWidgets.QMainWindow):
         self.server.display_info.connect(self.append_text_browser)
         self.server.new_conn.connect(self.add_conn)
         self.server.closed_conn.connect(self.del_conn)
+        self.logger = Logger('Application')
+        self.logger.info(f"Application started.")
         
     def append_text_browser(self, data):
         time_recv = datetime.strftime(datetime.now(), self.time_format)
@@ -41,24 +44,22 @@ class Application(QtWidgets.QMainWindow):
         self.main_window.comboBox.addItem(imei)
         self.main_window.labelCount.setText(str(self.server.clients))
         self.main_window.pushButtonDisconnect.setEnabled(True)
+        self.logger.info(f'New IMEI - {imei} added to client list. New no. of clients: {self.server.clients}.')
     
     def del_conn(self, imei):
         index = self.main_window.comboBox.findText(imei)
         self.main_window.comboBox.removeItem(index)
         self.main_window.labelCount.setText(str(self.server.clients))
+        self.logger.info(f'IMEI - {imei} removed from client list. New no. of clients: {self.server.clients}.')
         if self.server.clients == 0: 
             self.main_window.pushButtonDisconnect.setEnabled(False)
+            self.logger.warning(f'Server has no clients.')
 
     def send_gprs_cmd(self):
         cmd = self.main_window.lineEdit.text() + '\r\n'
         imei = self.main_window.comboBox.currentText()
         self.server.send_cmd(cmd, imei)
-
-    def change_server_type(self):
-        ser_type = self.sender().text()
-        self.trans_prot = ser_type
-        self.server.server.shutdown(socket.SHUT_RDWR)
-        self.server.server.close()
+        self.logger.info(f'GPRS CMD {cmd} is sent to {imei}.')
 
     def start_server(self):
         self.trans_prot = self.main_window.buttonGroup.checkedButton().text()
@@ -69,6 +70,7 @@ class Application(QtWidgets.QMainWindow):
         self.server.create_socket(self.port, self.trans_prot)
         self.server.start()
         self.append_text_browser(f"{self.trans_prot} server started on port {self.port}.")
+        self.logger.info(f"{self.trans_prot} server started on port {self.port}.")
 
     def stop_server(self):
         self.server.close()
@@ -78,6 +80,7 @@ class Application(QtWidgets.QMainWindow):
         self.__change_server_widget_state(self.main_window.horizontalLayout_2)
         self.__inverse_start_stop_button('start')
         self.append_text_browser(f"{self.trans_prot} server on port {self.port} was closed with all it's connections.")
+        self.logger.info(f"{self.trans_prot} server on port {self.port} was closed with all it's connections.")
 
     def auto_sending(self):
         checked = self.main_window.checkBox.isChecked()
@@ -85,8 +88,10 @@ class Application(QtWidgets.QMainWindow):
         self.server.automatic = checked
         self.server.automatic_period = period
         if checked:
+            self.logger.info(f'Starting automatic GPRS CMD sending.')
             self.send_gprs_cmd()
         else:
+            self.logger.info(f'Stopping automatic GPRS CMD sending.')
             self.server.stop_auto_sending()
         self.main_window.pushButtonSend.setEnabled(not checked)
         self.main_window.spinBoxSeconds.setEnabled(not checked)
@@ -94,6 +99,7 @@ class Application(QtWidgets.QMainWindow):
 
     def disconnect_client(self):
         imei = self.main_window.comboBox.currentText()
+        self.logger.info(f'Disconnect from client {imei} initiated by user action.')
         self.server.disconnect_client(imei)
 
     def __change_server_widget_state(self, layout):
@@ -137,6 +143,9 @@ class Server(QtCore.QThread):
         self.automatic_period = None
         self.auto_thread = None
         self.lock = threading.Lock()
+        self.logger = Logger('Server')
+        self.raw_logger = Logger('RAW', 'raw.log')
+        self.logger.info(f'Server is created.')
 
     def create_socket(self, port, trans_prot):
         self.host = '0.0.0.0'
@@ -149,6 +158,7 @@ class Server(QtCore.QThread):
             self.server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server.bind((self.host, self.port))
+        self.logger.info(f'{self.trans_prot} socket created and binded to {self.port} port.')
 
     def receive(self, channel, imei=False):
         full_msg = ''
@@ -176,11 +186,13 @@ class Server(QtCore.QThread):
                 #     #full_msg = full_msg[:-1]
             # Temporary. For debugging. Using netcat.
         # print(f"FULL MSG: {full_msg}")
+        self.raw_logger.info(f'<< {full_msg}')
         return full_msg
 
     def send(self, channel, msg):
         if isinstance(msg, str): msg = binascii.unhexlify(msg)
         channel.send(msg)
+        self.raw_logger.info(f'>> {binascii.hexlify(msg)}')
 
     def send_cmd(self, cmd, imei):
         conn = self.clientmap.get(imei)
@@ -195,9 +207,12 @@ class Server(QtCore.QThread):
             except BrokenPipeError as e:
                 conn = None
                 self.display_info.emit(f"Could not send GPRS CMD - {e}.")
+                self.logger.error(f"Could not send GPRS CMD - {e}.")
             self.display_info.emit(f"Sending GPRS CMD to {imei} - {cmd}")
+            self.logger.info(f"Sending GPRS CMD to {imei} - {cmd}")
         if self.automatic:
             self.display_info.emit(f"Scheduling GPRS CMD SENDING in {self.automatic_period} seconds.")
+            self.logger.info(f"Scheduling GPRS CMD SENDING in {self.automatic_period} seconds.")
             self.auto_thread = threading.Timer(self.automatic_period, self.send_cmd, [cmd, imei])
             self.auto_thread.start()
     
@@ -206,6 +221,7 @@ class Server(QtCore.QThread):
             self.auto_thread.cancel()
             self.auto_thread = None
             self.display_info.emit(f"Automatic GPRS CMD SENDING stopped.")
+            self.logger.info(f"Automatic GPRS CMD SENDING stopped.")
 
     def accept_new_connection(self, imei, conn_entity):
         if not self.clientmap.get(imei):
@@ -216,7 +232,12 @@ class Server(QtCore.QThread):
             self.new_conn.emit(imei)
         else:
             # Update clientmap with received conn_entity (UDP entity might change).
-            self.clientmap[imei] = conn_entity
+            if self.clientmap[imei] != conn_entity:
+                self.clientmap[imei] = conn_entity
+                self.logger.warning(f'{imei} is in the list of clients but its address and port are different.')
+                if self.trans_prot == 'TCP':
+                    conn_entity = conn_entity.getsockname()
+                self.logger.info(f'Updating {imei} address and port to {conn_entity}')
 
     def close(self):
         if self.trans_prot == 'TCP':
@@ -248,25 +269,27 @@ class Server(QtCore.QThread):
     def communicate(self, conn, addr):
         connected = True
         imei = None
+        self.logger.info('TCP Server-Client communication thread created.')
         while connected:
             if not imei:
-                print("Waiting for IMEI...")
+                self.logger.info(f"Waiting for IMEI...")
                 imei = self.receive(conn, True)
                 imei = parselib.parse_imei(imei)
                 #imei = '000F383634363036303432333339333234'
-                print(imei)
+                self.logger.info(f'IMEI received from the client - {imei}')
                 if not imei:
                     connected = False
                     self.clients -= 1
                     self.display_info.emit(f"Couldn't establish connection with {addr}")
+                    self.logger.error(f"Couldn't establish connection with {addr}")
                 else:
                     self.send(conn, '01')
-                
+                    self.logger.info(f'Sending IMEI reply...')
                     self.accept_new_connection(imei, conn)
-                    self.display_info.emit(f"Connected from: {addr}. IMEI: {imei}\n")
+                    self.display_info.emit(f"Connected from: {addr}. IMEI: {imei}")
+                    self.logger.info(f"Connected from: {addr}. IMEI: {imei}")
             else:
                 data = self.receive(conn)
-                print(data)
                 if data:
                     packet = (datetime.now(), data)
                     pinfo, reply = parselib.parse_packet(packet)
@@ -277,14 +300,18 @@ class Server(QtCore.QThread):
                         recs = parselib.parse_record_payload(rpayload, data_no, codec)
                         self.display_info.emit(f"IMEI: {imei} - {data}")
                         self.display_info.emit(f"Sending record reply: {reply}")
+                        self.logger.info(f"IMEI: {imei} - {data}")
+                        self.logger.info(f"Sending record reply: {reply}")
                         self.send(conn, reply)
                     elif codec == '0c':
                         response = parselib.parse_gprs_cmd_response(rpayload)
-                        self.display_info.emit(f"{response}")
+                        self.display_info.emit(f"{imei} - {response}")
+                        self.logger.info(f"{imei} - {response}")
                 else:
                     connected = False
                     self.clients -= 1
                     self.display_info.emit(f"Connection with {imei} - {addr} closed.")
+                    self.logger.info(f"Connection with {imei} - {addr} closed.")
                     self.closed_conn.emit(imei)
                     with self.lock:
                         del self.clientmap[imei]
@@ -295,13 +322,13 @@ class Server(QtCore.QThread):
         while self.running:
             try:
                 conn, addr = self.server.accept()
-                print(f"Connected from {addr}")
+                self.logger.info(f"Connected from {addr}")
                 t = threading.Thread(target=self.communicate, args=[conn, addr])
                 self.conn_threads.append(t)
                 t.start()
             except OSError as e:
                 # OSError can be raised if user tries to STOP the server.
-                print(f"{e} - Server thread is closing")
+                self.logger.info(f"{e} - Server thread is closing")
                 # Change .items() with .values() maybe?
                 for _, conn in self.clientmap.items():
                     conn.shutdown(socket.SHUT_RDWR)
@@ -328,10 +355,13 @@ class Server(QtCore.QThread):
                         self.accept_new_connection(imei, addr)
                         self.display_info.emit(f"IMEI: {imei} - {data}")
                         self.display_info.emit(f"Sending record reply: {reply}")
+                        self.logger.info(f"IMEI: {imei} - {data}")
+                        self.logger.info(f"Sending record reply: {reply}")
                         self.server.sendto(binascii.unhexlify(reply), addr)
                     else:
                         response = parselib.parse_gprs_cmd_response(rpayload)
                         self.display_info.emit(f"{response}")
+                        self.logger.info(f"{response}")
 
     def run(self):
         if self.trans_prot == 'TCP':
