@@ -13,6 +13,7 @@ from datetime import datetime
 from PyQt5 import QtWidgets, QtCore, Qt
 from window import Ui_MainWindow
 
+__version__ = '1.0'
 
 class Application(QtWidgets.QMainWindow):
 
