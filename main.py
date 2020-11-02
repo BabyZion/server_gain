@@ -22,8 +22,10 @@ class Application(QtWidgets.QMainWindow):
         self.main_window.pushButtonSend.pressed.connect(self.send_gprs_cmd)
         self.main_window.lineEdit.returnPressed.connect(self.send_gprs_cmd)
         self.main_window.pushButtonStart.pressed.connect(self.start_server)
+        self.main_window.pushButtonDisconnect.pressed.connect(self.disconnect_client)
         self.main_window.checkBox.toggled.connect(self.auto_sending)
         self.__change_server_widget_state(self.main_window.horizontalLayout_2)
+        self.main_window.pushButtonDisconnect.setEnabled(False)
         self.show()
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
         self.server = Server()
@@ -38,11 +40,14 @@ class Application(QtWidgets.QMainWindow):
     def add_conn(self, imei):
         self.main_window.comboBox.addItem(imei)
         self.main_window.labelCount.setText(str(self.server.clients))
+        self.main_window.pushButtonDisconnect.setEnabled(True)
     
     def del_conn(self, imei):
         index = self.main_window.comboBox.findText(imei)
         self.main_window.comboBox.removeItem(index)
         self.main_window.labelCount.setText(str(self.server.clients))
+        if self.server.clients == 0: 
+            self.main_window.pushButtonDisconnect.setEnabled(False)
 
     def send_gprs_cmd(self):
         cmd = self.main_window.lineEdit.text() + '\r\n'
@@ -86,6 +91,10 @@ class Application(QtWidgets.QMainWindow):
         self.main_window.pushButtonSend.setEnabled(not checked)
         self.main_window.spinBoxSeconds.setEnabled(not checked)
         self.main_window.lineEdit.setEnabled(not checked)
+
+    def disconnect_client(self):
+        imei = self.main_window.comboBox.currentText()
+        self.server.disconnect_client(imei)
 
     def __change_server_widget_state(self, layout):
         cnt = layout.count()
@@ -173,11 +182,8 @@ class Server(QtCore.QThread):
         if isinstance(msg, str): msg = binascii.unhexlify(msg)
         channel.send(msg)
 
-    def send_cmd(self, cmd, imei, conn=None):
-        if not conn:
-            for conn_imei, soc in self.clientmap.items():
-                if conn_imei == imei:
-                    conn = soc
+    def send_cmd(self, cmd, imei):
+        conn = self.clientmap.get(imei)
         if conn:
             packet = parselib.build_gprs_cmd(cmd)
             try:
@@ -192,13 +198,14 @@ class Server(QtCore.QThread):
             self.display_info.emit(f"Sending GPRS CMD to {imei} - {cmd}")
         if self.automatic:
             self.display_info.emit(f"Scheduling GPRS CMD SENDING in {self.automatic_period} seconds.")
-            self.auto_thread = threading.Timer(self.automatic_period, self.send_cmd, [cmd, imei, conn])
+            self.auto_thread = threading.Timer(self.automatic_period, self.send_cmd, [cmd, imei])
             self.auto_thread.start()
     
     def stop_auto_sending(self):
-        if self.auto_thread: self.auto_thread.cancel()
-        self.auto_thread = None
-        self.display_info.emit(f"Automatic GPRS CMD SENDING stopped.")
+        if self.auto_thread: 
+            self.auto_thread.cancel()
+            self.auto_thread = None
+            self.display_info.emit(f"Automatic GPRS CMD SENDING stopped.")
 
     def accept_new_connection(self, imei, conn_entity):
         if not self.clientmap.get(imei):
@@ -223,6 +230,20 @@ class Server(QtCore.QThread):
             with self.lock:
                 self.clientmap = {}
         self.running = False
+
+    def disconnect_client(self, imei):
+        conn = self.clientmap.get(imei)
+        if self.trans_prot == 'TCP':
+            conn.shutdown(socket.SHUT_RDWR)
+            conn.close()
+            # Everything else is handled automatically in self.communicate().
+        elif self.trans_prot == 'UDP':
+            with self.lock:
+                del self.clientmap[imei]
+            self.clients -= 1
+            self.closed_conn.emit(imei)
+        self.stop_auto_sending()
+        self.display_info.emit(f"Connection with {imei} closed by user input.")
 
     def communicate(self, conn, addr):
         connected = True
@@ -281,6 +302,7 @@ class Server(QtCore.QThread):
             except OSError as e:
                 # OSError can be raised if user tries to STOP the server.
                 print(f"{e} - Server thread is closing")
+                # Change .items() with .values() maybe?
                 for _, conn in self.clientmap.items():
                     conn.shutdown(socket.SHUT_RDWR)
                     conn.close()
