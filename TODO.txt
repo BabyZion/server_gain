@@ -1,24 +1,60 @@
+TODO:
 
-Start .git
+    Resizing
 
-Add gprs and imei parsing in parselib
+    EGTS server support
 
-Attempt to do operations exclusively with bytes in receive and send.
+    Encryption
 
-Fix connection termination
+    Save settings on exit.
 
-Invalid packet crc detected
+    Server only uses bytes. str is only used when displaying information on a text browser.
 
-Sending GPRS commands with rapid record generation/sending
+    Code refactoring so TCP and UDP servers have seperate classes.
+    
+    Multiple servers
 
-UDP support
+    TAVL functionality
 
-Multiple device support
 
-Automatic GPRS sending.
+DONE:
 
-Multiple servers
+    Start .git
 
-TAVL functionality
+    Add gprs and imei parsing in parselib
 
-Encryption
+    Attempt to do operations exclusively with bytes in receive and send.
+
+    Connection termination handling.
+
+    Invalid packet crc detected (Galimai gaminio bug) It seems that error happens when cmd is longet than 7 chars
+
+    Add client count to GUI
+
+    Add parselib support for raw data to be printed.
+
+    Handling smae client connecting twice (eg. after restart)
+
+    UDP support
+
+    Multiple device support
+
+    Add threading lock for slef.clientmap when endong connections.
+
+    Automatic GPRS sending.
+
+    Widgets are disabled if server is not started.
+
+    Rename received_data to display_info.
+
+    Disconnect button for disconnecting specific client.
+
+    Logging
+
+Future:
+
+    Sending GPRS commands with rapid record generation/sending. Need more info about actual working of the device.
+
+    UDP automatic GPRS cmd sending when connection reestablishes.
+
+    Logging in one method.
