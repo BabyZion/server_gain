@@ -142,6 +142,7 @@ class Server(QtCore.QThread):
         self.running = False
         self.automatic = None
         self.automatic_period = None
+        self.automatic_imei = None
         self.auto_thread = None
         self.lock = threading.Lock()
         self.logger = Logger('Server')
@@ -228,6 +229,7 @@ class Server(QtCore.QThread):
         if self.auto_thread: 
             self.auto_thread.cancel()
             self.auto_thread = None
+            self.automatic_imei = None
             self.display_info.emit(f"Automatic GPRS CMD SENDING stopped.")
             self.logger.info(f"Automatic GPRS CMD SENDING stopped.")
 
@@ -272,7 +274,8 @@ class Server(QtCore.QThread):
                 del self.clientmap[imei]
             self.clients -= 1
             self.closed_conn.emit(imei)
-        self.stop_auto_sending()
+        if self.automatic_imei == imei:
+            self.stop_auto_sending()
         self.display_info.emit(f"Connection with {imei} closed by user input.")
 
     def communicate(self, conn, addr):
