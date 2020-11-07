@@ -36,6 +36,8 @@ class Application(QtWidgets.QMainWindow):
         self.server.closed_conn.connect(self.del_conn)
         self.logger = Logger('Application')
         self.logger.info(f"Application started.")
+        self.server_settings_widgets = [self.main_window.labelPort, self.main_window.spinBox,
+            self.main_window.radioButtonTCP, self.main_window.radioButtonUDP]
         
     def append_text_browser(self, data):
         time_recv = datetime.strftime(datetime.now(), self.time_format)
@@ -65,7 +67,7 @@ class Application(QtWidgets.QMainWindow):
     def start_server(self):
         self.trans_prot = self.main_window.buttonGroup.checkedButton().text()
         self.port = self.main_window.spinBox.value()
-        self.__change_server_widget_state(self.main_window.horizontalLayout_3)
+        self.__change_server_widget_state(self.server_settings_widgets)
         self.__change_server_widget_state(self.main_window.horizontalLayout_2)
         self.__inverse_start_stop_button('stop')
         self.server.create_socket(self.port, self.trans_prot)
@@ -77,7 +79,7 @@ class Application(QtWidgets.QMainWindow):
         self.server.close()
         if self.main_window.checkBox.isChecked():
             self.main_window.checkBox.setChecked(False)
-        self.__change_server_widget_state(self.main_window.horizontalLayout_3)
+        self.__change_server_widget_state(self.server_settings_widgets)
         self.__change_server_widget_state(self.main_window.horizontalLayout_2)
         self.__inverse_start_stop_button('start')
         self.append_text_browser(f"{self.trans_prot} server on port {self.port} was closed with all it's connections.")
@@ -104,13 +106,20 @@ class Application(QtWidgets.QMainWindow):
         self.server.disconnect_client(imei)
 
     def __change_server_widget_state(self, layout):
-        cnt = layout.count()
-        for i in range(cnt):
-            widget = layout.itemAt(i).widget()
-            if widget.isEnabled():
-                widget.setEnabled(False)
-            else:
-                widget.setEnabled(True)
+        if isinstance(layout, list):
+            for widget in layout:
+                if widget.isEnabled():
+                    widget.setEnabled(False)
+                else:
+                    widget.setEnabled(True)
+        else:
+            cnt = layout.count()
+            for i in range(cnt):
+                widget = layout.itemAt(i).widget()
+                if widget.isEnabled():
+                    widget.setEnabled(False)
+                else:
+                    widget.setEnabled(True)
 
     def __inverse_start_stop_button(self, state):
         self.main_window.pushButtonStart.setEnabled(True)
