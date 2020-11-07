@@ -166,10 +166,17 @@ class Server(QtCore.QThread):
         new_msg = True
         receive = True
         while receive:
-            msg = channel.recv(64)
-            msg = str(binascii.hexlify(msg))[2:-1]
+            # Receiving has to be done like this on Windows,
+            # otherwise it crashes when disconnecting from client.
+            msg = ''
+            try:
+                msg = channel.recv(64)
+                msg = str(binascii.hexlify(msg))[2:-1]
+            except OSError:
+                pass
             if not msg:
-                return
+                self.logger.warning(f"Received nothing!!!")
+                return msg
             if new_msg:
                 if imei:
                     #msg = msg[:-1] # Temporary. For debugging. Using netcat.
@@ -242,7 +249,8 @@ class Server(QtCore.QThread):
 
     def close(self):
         if self.trans_prot == 'TCP':
-            self.server.shutdown(socket.SHUT_RDWR)
+            # For some reason, Windows doesn't play nice with shutdown here. Needs further investigation.
+            # self.server.shutdown(socket.SHUT_RDWR)
             self.server.close()
         elif self.trans_prot == 'UDP':
             self.server.sendto(self.UDP_END_PACKET, ('127.0.0.1', self.port))
@@ -328,13 +336,13 @@ class Server(QtCore.QThread):
                 self.conn_threads.append(t)
                 t.start()
             except OSError as e:
+                self.running = False
                 # OSError can be raised if user tries to STOP the server.
                 self.logger.info(f"{e} - Server thread is closing")
                 # Change .items() with .values() maybe?
                 for _, conn in self.clientmap.items():
                     conn.shutdown(socket.SHUT_RDWR)
                     conn.close()
-                self.running = False
 
     def run_udp_server(self):
         self.running = True
@@ -344,6 +352,7 @@ class Server(QtCore.QThread):
                 if addr[0] != ('127.0.0.1'): self.display_info.emit(f"Received UDP packet from {addr}.")
                 data = str(binascii.hexlify(data))[2:-1]
                 if data == '00000000':
+                    self.running = False # For some reason, server doesn't close greacfully on Windows without this line.
                     self.server.close()
                 else:
                     packet = (datetime.now(), data)

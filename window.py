@@ -87,7 +87,7 @@ class Ui_MainWindow(object):
         self.spinBox.setReadOnly(False)
         self.spinBox.setAccelerated(True)
         self.spinBox.setMaximum(65535)
-        self.spinBox.setProperty("value", 6969)
+        self.spinBox.setProperty("value", 7253)
         self.spinBox.setObjectName("spinBox")
         self.horizontalLayout_3.addWidget(self.spinBox)
         self.radioButtonTCP = QtWidgets.QRadioButton(self.horizontalLayoutWidget)
