@@ -2,6 +2,7 @@
 
 import sys
 import socket
+import ssl
 import select
 import parselib
 import time
@@ -67,13 +68,14 @@ class Application(QtWidgets.QMainWindow):
     def start_server(self):
         self.trans_prot = self.main_window.buttonGroup.checkedButton().text()
         self.port = self.main_window.spinBox.value()
+        self.use_ssl = self.main_window.checkBoxSSL.isChecked()
         self.__change_server_widget_state(self.server_settings_widgets)
         self.__change_server_widget_state(self.main_window.horizontalLayout_2)
         self.__inverse_start_stop_button('stop')
-        self.server.create_socket(self.port, self.trans_prot)
+        self.server.create_socket(self.port, self.trans_prot, self.use_ssl)
         self.server.start()
-        self.append_text_browser(f"{self.trans_prot} server started on port {self.port}.")
-        self.logger.info(f"{self.trans_prot} server started on port {self.port}.")
+        self.append_text_browser(f"{self.trans_prot} server started on port {self.port}. SSL enabled - {self.use_ssl}.")
+        self.logger.info(f"{self.trans_prot} server started on port {self.port}. SSL enabled - {self.use_ssl}.")
 
     def stop_server(self):
         self.server.close()
@@ -149,6 +151,7 @@ class Server(QtCore.QThread):
         self.conn_threads = []
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
         self.running = False
+        self.use_ssl = None
         self.automatic = None
         self.automatic_period = None
         self.automatic_imei = None
@@ -158,17 +161,21 @@ class Server(QtCore.QThread):
         self.raw_logger = Logger('RAW', 'raw.log')
         self.logger.info(f'Server is created.')
 
-    def create_socket(self, port, trans_prot):
+    def create_socket(self, port, trans_prot, use_ssl):
         self.host = '0.0.0.0'
         self.port = int(port)
         self.username = "SERVER"
         self.trans_prot = trans_prot
+        self.use_ssl = use_ssl
         if self.trans_prot == 'TCP':
             self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         elif self.trans_prot == 'UDP':
             self.server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server.bind((self.host, self.port))
+        if self.use_ssl:
+            self.ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            self.ssl_context.load_cert_chain(certfile="root.pem", keyfile="our_key.key")
         self.logger.info(f'{self.trans_prot} socket created and binded to {self.port} port.')
 
     def receive(self, channel, imei=False):
@@ -344,6 +351,8 @@ class Server(QtCore.QThread):
             try:
                 conn, addr = self.server.accept()
                 self.logger.info(f"Connected from {addr}")
+                if self.use_ssl:
+                    conn =  self.ssl_context.wrap_socket(conn, server_side=True)
                 t = threading.Thread(target=self.communicate, args=[conn, addr])
                 self.conn_threads.append(t)
                 t.start()
