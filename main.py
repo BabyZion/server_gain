@@ -307,7 +307,6 @@ class Server(QtCore.QThread):
                 self.logger.info(f'IMEI received from the client - {imei}')
                 if not imei:
                     connected = False
-                    self.clients -= 1
                     self.display_info.emit(f"Couldn't establish connection with {addr}")
                     self.logger.error(f"Couldn't establish connection with {addr}")
                 else:
