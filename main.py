@@ -351,10 +351,15 @@ class Server(QtCore.QThread):
                 conn, addr = self.server.accept()
                 self.logger.info(f"Connected from {addr}")
                 if self.use_ssl:
+                    self.logger.info(f"Attempting to establish SSL connection with {addr}...")
+                    self.display_info.emit(f"Attempting to establish SSL connection with {addr}...")
                     conn =  self.ssl_context.wrap_socket(conn, server_side=True)
                 t = threading.Thread(target=self.communicate, args=[conn, addr])
                 self.conn_threads.append(t)
                 t.start()
+            except ssl.SSLError:
+                self.logger.error(f"SSL connection with {addr} couldn't be established.")
+                self.display_info.emit(f"SSL connection with {addr} couldn't be established.")
             except OSError as e:
                 self.running = False
                 # OSError can be raised if user tries to STOP the server.
