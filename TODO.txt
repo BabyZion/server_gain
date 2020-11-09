@@ -1,9 +1,5 @@
 TODO:
 
-    Resizing
-
-    EGTS server support
-
     Encryption
 
     Save settings on exit.
@@ -51,6 +47,8 @@ DONE:
 
     Logging
 
+    Resizing
+
 Future:
 
     Sending GPRS commands with rapid record generation/sending. Need more info about actual working of the device.
@@ -58,3 +56,5 @@ Future:
     UDP automatic GPRS cmd sending when connection reestablishes.
 
     Logging in one method.
+
+    EGTS server support
