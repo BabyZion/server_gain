@@ -38,7 +38,7 @@ class Application(QtWidgets.QMainWindow):
         self.logger = Logger('Application')
         self.logger.info(f"Application started.")
         self.server_settings_widgets = [self.main_window.labelPort, self.main_window.spinBox,
-            self.main_window.radioButtonTCP, self.main_window.radioButtonUDP]
+            self.main_window.radioButtonTCP, self.main_window.radioButtonUDP, self.main_window.checkBoxSSL]
         
     def append_text_browser(self, data):
         time_recv = datetime.strftime(datetime.now(), self.time_format)
