@@ -1,11 +1,5 @@
 TODO:
 
-    Resizing
-
-    EGTS server support
-
-    Encryption
-
     Save settings on exit.
 
     Server only uses bytes. str is only used when displaying information on a text browser.
@@ -51,6 +45,10 @@ DONE:
 
     Logging
 
+    Resizing
+
+    Encryption
+
 Future:
 
     Sending GPRS commands with rapid record generation/sending. Need more info about actual working of the device.
@@ -58,3 +56,9 @@ Future:
     UDP automatic GPRS cmd sending when connection reestablishes.
 
     Logging in one method.
+
+    EGTS server support
+
+    MBEDTLS support
+
+    DTLS support
