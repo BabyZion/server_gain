@@ -27,6 +27,9 @@ class Application(QtWidgets.QMainWindow):
         self.main_window.pushButtonStart.pressed.connect(self.start_server)
         self.main_window.pushButtonDisconnect.pressed.connect(self.disconnect_client)
         self.main_window.checkBox.toggled.connect(self.auto_sending)
+        self.main_window.checkBoxSSL.toggled.connect(self.check_certs)
+        self.main_window.actionSelectCert.triggered.connect(self.select_certs)
+        self.main_window.actionCreateCert.triggered.connect(self.not_implemented_warning)
         self.__change_server_widget_state(self.main_window.horizontalLayout_2)
         self.main_window.pushButtonDisconnect.setEnabled(False)
         self.show()
@@ -72,6 +75,7 @@ class Application(QtWidgets.QMainWindow):
         self.__change_server_widget_state(self.server_settings_widgets)
         self.__change_server_widget_state(self.main_window.horizontalLayout_2)
         self.__inverse_start_stop_button('stop')
+        self.main_window.actionSelectCert.setEnabled(False)
         self.server.create_socket(self.port, self.trans_prot, self.use_ssl)
         self.server.start()
         self.append_text_browser(f"{self.trans_prot} server started on port {self.port}. SSL enabled - {self.use_ssl}.")
@@ -84,6 +88,7 @@ class Application(QtWidgets.QMainWindow):
         self.__change_server_widget_state(self.server_settings_widgets)
         self.__change_server_widget_state(self.main_window.horizontalLayout_2)
         self.__inverse_start_stop_button('start')
+        self.main_window.actionSelectCert.setEnabled(True)
         self.append_text_browser(f"{self.trans_prot} server on port {self.port} was closed with all it's connections.")
         self.logger.info(f"{self.trans_prot} server on port {self.port} was closed with all it's connections.")
 
@@ -106,6 +111,47 @@ class Application(QtWidgets.QMainWindow):
         imei = self.main_window.comboBox.currentText()
         self.logger.info(f'Disconnect from client {imei} initiated by user action.')
         self.server.disconnect_client(imei)
+
+    def cert_warning(self):
+        warn = QtWidgets.QMessageBox(self)
+        warn.setIcon(QtWidgets.QMessageBox.Warning)
+        warn.setText("Not all certificates required for SSL communication are selected. "
+            "Do you want to select them now?")
+        warn.setWindowTitle("Certificate warning!")
+        warn.setStandardButtons(QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+        ret_val = warn.exec_()
+        if ret_val == QtWidgets.QMessageBox.Yes:
+            self.select_certs()
+            self.check_certs()
+        else:
+            self.main_window.checkBoxSSL.setChecked(False)
+        warn.done(1)
+        
+    def check_certs(self):
+        ssl_checkbox = self.main_window.checkBoxSSL
+        if ssl_checkbox.isChecked():
+            if not self.server.certfile or not self.server.keyfile:
+                self.cert_warning()
+
+    def select_certs(self):
+        cert_files = QtWidgets.QFileDialog.getOpenFileNames(self, filter="Certfile, Keyfile (*.pem *.key)")
+        if cert_files[0]:    
+            for f in cert_files[0]:
+                if f.endswith('.pem'): self.server.certfile = f
+                if f.endswith('.key'): self.server.keyfile = f
+            self.logger.info(f'Certificates selected - \nCertfile: {self.server.certfile}\n'
+                f'Keyfile: {self.server.keyfile}')
+            self.append_text_browser(f'Certificates selected - \nCertfile: {self.server.certfile}'
+                f'\nKeyfile: {self.server.keyfile}')
+
+    def not_implemented_warning(self):
+        warn = QtWidgets.QMessageBox(self)
+        warn.setIcon(QtWidgets.QMessageBox.Warning)
+        warn.setText("This feature is not yet implemented. :(")
+        warn.setWindowTitle("Not implemented warning!")
+        warn.setStandardButtons(QtWidgets.QMessageBox.Ok)
+        self.append_text_browser(f'NOT IMPLEMENTED!!!')
+        ret_val = warn.exec_()
 
     def __change_server_widget_state(self, layout):
         if isinstance(layout, list):
@@ -152,6 +198,8 @@ class Server(QtCore.QThread):
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
         self.running = False
         self.use_ssl = None
+        self.certfile = None
+        self.keyfile = None
         self.automatic = None
         self.automatic_period = None
         self.automatic_imei = None
@@ -175,7 +223,7 @@ class Server(QtCore.QThread):
         self.server.bind((self.host, self.port))
         if self.use_ssl:
             self.ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-            self.ssl_context.load_cert_chain(certfile="root.pem", keyfile="our_key.key")
+            self.ssl_context.load_cert_chain(certfile=self.certfile, keyfile=self.keyfile)
         self.logger.info(f'{self.trans_prot} socket created and binded to {self.port} port.')
 
     def receive(self, channel, imei=False):
