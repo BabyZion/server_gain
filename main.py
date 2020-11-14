@@ -40,6 +40,8 @@ class Application(QtWidgets.QMainWindow):
         self.server.closed_conn.connect(self.del_conn)
         self.logger = Logger('Application')
         self.logger.info(f"Application started.")
+        self.settings = QtCore.QSettings('server_gain', 'app_settings')
+        self.__load_settings()
         self.server_settings_widgets = [self.main_window.labelPort, self.main_window.spinBox,
             self.main_window.radioButtonTCP, self.main_window.radioButtonUDP, self.main_window.checkBoxSSL]
         
@@ -153,6 +155,9 @@ class Application(QtWidgets.QMainWindow):
         self.append_text_browser(f'NOT IMPLEMENTED!!!')
         ret_val = warn.exec_()
 
+    def closeEvent(self, event):
+        self.__save_settings()
+
     def __change_server_widget_state(self, layout):
         if isinstance(layout, list):
             for widget in layout:
@@ -178,6 +183,30 @@ class Application(QtWidgets.QMainWindow):
         elif state == 'stop':
             self.main_window.pushButtonStart.setText('STOP')
             self.main_window.pushButtonStart.pressed.connect(self.stop_server)
+
+    def __load_settings(self):
+        self.resize(self.settings.value('win_size'))
+        self.move(self.settings.value('win_pos'))
+        self.main_window.spinBox.setValue(int(self.settings.value('port')))
+        for button in self.main_window.buttonGroup.buttons():
+            if button.text() == self.settings.value('protocol'):
+                button.setChecked(True)
+                break
+        self.server.certfile = self.settings.value('certfile')
+        self.server.keyfile = self.settings.value('keyfile')
+        if self.settings.value('ssl') == 'true':
+            self.main_window.checkBoxSSL.setChecked(True)
+        elif self.settings.value('ssl') == 'false': 
+            self.main_window.checkBoxSSL.setChecked(False)
+
+    def __save_settings(self):
+        self.settings.setValue('win_size', self.size())
+        self.settings.setValue('win_pos', self.pos())
+        self.settings.setValue('port', self.main_window.spinBox.value())
+        self.settings.setValue('protocol', self.main_window.buttonGroup.checkedButton().text())
+        self.settings.setValue('ssl', self.main_window.checkBoxSSL.isChecked())
+        self.settings.setValue('certfile', self.server.certfile)
+        self.settings.setValue('keyfile', self.server.keyfile)
 
 
 class Server(QtCore.QThread):

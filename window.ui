@@ -180,7 +180,7 @@
          <number>65535</number>
         </property>
         <property name="value">
-         <number>6969</number>
+         <number>0</number>
         </property>
        </widget>
       </item>
@@ -295,8 +295,32 @@
      <height>22</height>
     </rect>
    </property>
+   <widget class="QMenu" name="menuCertfiles">
+    <property name="title">
+     <string>Certfiles</string>
+    </property>
+    <addaction name="actionSelectCert"/>
+    <addaction name="actionCreateCert"/>
+   </widget>
+   <addaction name="menuCertfiles"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionSelectCert">
+   <property name="text">
+    <string>Select</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+S</string>
+   </property>
+  </action>
+  <action name="actionCreateCert">
+   <property name="text">
+    <string>Create</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+C</string>
+   </property>
+  </action>
  </widget>
  <resources/>
  <connections/>
