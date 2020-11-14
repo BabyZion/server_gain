@@ -2,6 +2,8 @@ TODO:
 
     Save settings on exit.
 
+    Attempt to check if port is externally open.
+
     Server only uses bytes. str is only used when displaying information on a text browser.
 
     Code refactoring so TCP and UDP servers have seperate classes.
@@ -49,6 +51,8 @@ DONE:
 
     Encryption
 
+    Selecting .pem and .key files.
+
 Future:
 
     Sending GPRS commands with rapid record generation/sending. Need more info about actual working of the device.
@@ -62,3 +66,5 @@ Future:
     MBEDTLS support
 
     DTLS support
+
+    Certificate creation
