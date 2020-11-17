@@ -185,19 +185,22 @@ class Application(QtWidgets.QMainWindow):
             self.main_window.pushButtonStart.pressed.connect(self.stop_server)
 
     def __load_settings(self):
-        self.resize(self.settings.value('win_size'))
-        self.move(self.settings.value('win_pos'))
-        self.main_window.spinBox.setValue(int(self.settings.value('port')))
-        for button in self.main_window.buttonGroup.buttons():
-            if button.text() == self.settings.value('protocol'):
-                button.setChecked(True)
-                break
-        self.server.certfile = self.settings.value('certfile')
-        self.server.keyfile = self.settings.value('keyfile')
-        if self.settings.value('ssl') == 'true':
-            self.main_window.checkBoxSSL.setChecked(True)
-        elif self.settings.value('ssl') == 'false': 
-            self.main_window.checkBoxSSL.setChecked(False)
+        try:
+            self.resize(self.settings.value('win_size'))
+            self.move(self.settings.value('win_pos'))
+            self.main_window.spinBox.setValue(int(self.settings.value('port')))
+            for button in self.main_window.buttonGroup.buttons():
+                if button.text() == self.settings.value('protocol'):
+                    button.setChecked(True)
+                    break
+            self.server.certfile = self.settings.value('certfile')
+            self.server.keyfile = self.settings.value('keyfile')
+            if self.settings.value('ssl') == 'true':
+                self.main_window.checkBoxSSL.setChecked(True)
+            elif self.settings.value('ssl') == 'false': 
+                self.main_window.checkBoxSSL.setChecked(False)
+        except TypeError:
+            pass
 
     def __save_settings(self):
         self.settings.setValue('win_size', self.size())
