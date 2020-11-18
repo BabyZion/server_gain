@@ -1,6 +1,6 @@
 TODO:
 
-    Save settings on exit.
+	Handling exceptions when port is already taken.
 
     Attempt to check if port is externally open.
 
@@ -52,6 +52,8 @@ DONE:
     Encryption
 
     Selecting .pem and .key files.
+	
+	Save settings on exit.
 
 Future:
 
