@@ -1,7 +1,5 @@
 TODO:
 
-    Save settings on exit.
-
     Attempt to check if port is externally open.
 
     Server only uses bytes. str is only used when displaying information on a text browser.
@@ -52,6 +50,8 @@ DONE:
     Encryption
 
     Selecting .pem and .key files.
+
+    Save settings on exit.
 
 Future:
 
