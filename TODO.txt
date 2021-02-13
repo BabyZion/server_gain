@@ -1,6 +1,8 @@
 TODO:
 
-    Attempt to check if port is externally open.
+    Encryption
+
+    Save settings on exit.
 
     Server only uses bytes. str is only used when displaying information on a text browser.
 
@@ -47,12 +49,6 @@ DONE:
 
     Resizing
 
-    Encryption
-
-    Selecting .pem and .key files.
-
-    Save settings on exit.
-
 Future:
 
     Sending GPRS commands with rapid record generation/sending. Need more info about actual working of the device.
@@ -62,9 +58,3 @@ Future:
     Logging in one method.
 
     EGTS server support
-
-    MBEDTLS support
-
-    DTLS support
-
-    Certificate creation
