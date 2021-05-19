@@ -235,35 +235,41 @@ def build_record_reply(protocol, no_of_recs, packet_id=None):
 
 def parse_beacon_avl_id(data, timestamp):
 
-    data_part, data = data[:2], data[2:]
-
     beacons = []
+    data_temp = data
 
-    while data:
+    # 3rd iteration Advanced (Universal) Beacons configuration (Eval 03.27.01.Rev.120) Simple
+    # data_part, data = data[:2], data[2:]
+    # while data:
+    #     beacon = {}
+    #     beacon['data'] = data_temp
+    #     flag, data = int(data[:2],16), data[2:]
+    #     beacon_flag = []
+    #     for _ in range(8):
+    #         beacon_flag.append(flag & 1)
+    #         flag >>= 1
+    #     beacon['timestamp'] = datetime.strftime(datetime.fromtimestamp(int(timestamp, 16) // 1000), '%Y.%m.%d %H:%M:%S')
+    #     beacon['beacon_flag'] = beacon_flag
+    #     if beacon_flag[5]:
+    #         beacon['uuid'], data = data[:40], data[40:]
+    #     else:
+    #         beacon['uuid'], data = data[:32], data[32:]
+    #     if beacon_flag[0]: beacon['signal_str'], data = f"-{int(data[:2], 16) % 100} dbm", data[2:]
+    #     if beacon_flag[1]: beacon['batt_v'], data = f"{data[:4]} V", data[4:]
+    #     if beacon_flag[2]: beacon['temp'], data = f"{data[:4]} C", data[4:]
+
+    # 3rd iteration Advanced (Universal) Beacons configuration (Eval 03.27.01.Rev.120) Simple
+    no_of_beacons, data = int(data[:2],16), data[2:]
+    for _ in range(no_of_beacons):
         beacon = {}
-
-        beacon['data'] = data
-        flag, data = int(data[:2],16), data[2:]
-        beacon_flag = []
-        for _ in range(8):
-            beacon_flag.append(flag & 1)
-            flag >>= 1
-        
+        beacon['data'] = data_temp
+        beacon['signal_str'], data = f"-{int(data[:2], 16) % 100} dbm", data[2:]
+        id_len, data = int(data[:2],16), data[2:]
+        beacon['uuid'], data = data[:id_len*2], data[id_len*2:]
+        add_dat_len, data = id_len, data = int(data[:2],16), data[2:]
+        beacon['add_data'], data = data[:add_dat_len*2], data[add_dat_len*2:]
         beacon['timestamp'] = datetime.strftime(datetime.fromtimestamp(int(timestamp, 16) // 1000), '%Y.%m.%d %H:%M:%S')
-        beacon['beacon_flag'] = beacon_flag
-
-        if beacon_flag[5]:
-            beacon['uuid'], data = data[:40], data[40:]
-        else:
-            beacon['uuid'], data = data[:32], data[32:]
-        
-        if beacon_flag[0]: beacon['signal_str'], data = f"-{int(data[:2], 16) % 100} dbm", data[2:]
-        if beacon_flag[1]: beacon['batt_v'], data = f"{data[:4]} V", data[4:]
-        if beacon_flag[2]: beacon['temp'], data = f"{data[:4]} C", data[4:]
-
         beacons.append(beacon)
-
-
     return beacons
 
 def pretty_beacon_data(beacon_data):
