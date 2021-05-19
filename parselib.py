@@ -232,3 +232,42 @@ def build_record_reply(protocol, no_of_recs, packet_id=None):
         return '0' * (8 - len(no_of_recs)) + no_of_recs
     elif protocol == 'UDP':
         return '0' * (14 - len(no_of_recs + packet_id)) + packet_id + no_of_recs
+
+def parse_beacon_avl_id(data, timestamp):
+
+    data_part, data = data[:2], data[2:]
+
+    beacons = []
+
+    while data:
+        beacon = {}
+
+        beacon['data'] = data
+        flag, data = int(data[:2],16), data[2:]
+        beacon_flag = []
+        for _ in range(8):
+            beacon_flag.append(flag & 1)
+            flag >>= 1
+        
+        beacon['timestamp'] = datetime.strftime(datetime.fromtimestamp(int(timestamp, 16) // 1000), '%Y.%m.%d %H:%M:%S')
+        beacon['beacon_flag'] = beacon_flag
+
+        if beacon_flag[5]:
+            beacon['uuid'], data = data[:40], data[40:]
+        else:
+            beacon['uuid'], data = data[:32], data[32:]
+        
+        if beacon_flag[0]: beacon['signal_str'], data = f"-{int(data[:2], 16) % 100} dbm", data[2:]
+        if beacon_flag[1]: beacon['batt_v'], data = f"{data[:4]} V", data[4:]
+        if beacon_flag[2]: beacon['temp'], data = f"{data[:4]} C", data[4:]
+
+        beacons.append(beacon)
+
+
+    return beacons
+
+def pretty_beacon_data(beacon_data):
+    data = '\n'
+    for i,v in beacon_data.items():
+        data += f"{i}: {v}\n"
+    return data

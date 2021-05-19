@@ -28,6 +28,7 @@ class Application(QtWidgets.QMainWindow):
         self.main_window.pushButtonDisconnect.pressed.connect(self.disconnect_client)
         self.main_window.checkBox.toggled.connect(self.auto_sending)
         self.main_window.checkBoxSSL.toggled.connect(self.check_certs)
+        self.main_window.checkBoxBeacon.toggled.connect(self.beacon_test)
         self.main_window.actionSelectCert.triggered.connect(self.select_certs)
         self.main_window.actionCreateCert.triggered.connect(self.not_implemented_warning)
         self.__change_server_widget_state(self.main_window.horizontalLayout_2)
@@ -146,6 +147,14 @@ class Application(QtWidgets.QMainWindow):
             self.append_text_browser(f'Certificates selected - \nCertfile: {self.server.certfile}'
                 f'\nKeyfile: {self.server.keyfile}')
 
+    def beacon_test(self):
+        checked = self.main_window.checkBoxBeacon.isChecked()
+        self.server.beacon = checked
+        if checked:
+            self.logger.info(f"Server is entering Beacon Testing mode.")
+        else:
+            self.logger.info(f"Server is exiting from Beacon Testing mode.")
+
     def not_implemented_warning(self):
         warn = QtWidgets.QMessageBox(self)
         warn.setIcon(QtWidgets.QMessageBox.Warning)
@@ -236,6 +245,7 @@ class Server(QtCore.QThread):
         self.automatic_period = None
         self.automatic_imei = None
         self.auto_thread = None
+        self.beacon = None
         self.lock = threading.Lock()
         self.logger = Logger('Server')
         self.raw_logger = Logger('RAW', 'raw.log')
@@ -405,6 +415,17 @@ class Server(QtCore.QThread):
                     codec = pinfo['codec']
                     if codec == '08' or codec == '8e':
                         recs = parselib.parse_record_payload(rpayload, data_no, codec)
+                        # If beacon testing mode is enabled, parse and print beacon AVL data.
+                        if self.beacon:
+                            bec_data = []
+                            for rec in recs:
+                                for avl_id, value in rec.items():
+                                    if avl_id == '0181' or avl_id == '021e':
+                                        bec_data += parselib.parse_beacon_avl_id(value, rec['timestamp'])
+                            printable_data = ''
+                            for bec in bec_data:
+                                printable_data += parselib.pretty_beacon_data(bec)
+                            if bec_data: data = printable_data
                         self.display_info.emit(f"IMEI: {imei} - {data}")
                         self.display_info.emit(f"Sending record reply: {reply}")
                         self.logger.info(f"IMEI: {imei} - {data}")
