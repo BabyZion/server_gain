@@ -420,8 +420,10 @@ class Server(QtCore.QThread):
                             bec_data = []
                             for rec in recs:
                                 for avl_id, value in rec.items():
-                                    if avl_id == '0181' or avl_id == '0224':
-                                        bec_data += parselib.parse_beacon_avl_id(value, rec['timestamp'])
+                                    if avl_id == '0181':
+                                        bec_data += parselib.parse_beacon_avl_id_simple(value, rec['timestamp'])
+                                    elif avl_id == '0224':
+                                        bec_data += parselib.parse_beacon_avl_id_advanced(value, rec['timestamp'])
                             printable_data = ''
                             for bec in bec_data:
                                 printable_data += parselib.pretty_beacon_data(bec)

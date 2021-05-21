@@ -233,44 +233,93 @@ def build_record_reply(protocol, no_of_recs, packet_id=None):
     elif protocol == 'UDP':
         return '0' * (14 - len(no_of_recs + packet_id)) + packet_id + no_of_recs
 
-def parse_beacon_avl_id(data, timestamp):
+def parse_beacon_avl_id_simple(data, timestamp):
+    """
+    Parses BLE Beacon AVL ID 385 (Simple mode) data. 
 
+        Parameters:
+            data (str): AVL ID 385 data parsed from the record.
+            timestamp (str): timestamp parsed from record in HEX format.
+
+        Returns:
+            beacons (list): list of dict representation of beacons parsed from
+            data.
+    """
     beacons = []
     data_temp = data
-
     # 3rd iteration Advanced (Universal) Beacons configuration (Eval 03.27.01.Rev.120) Simple
-    # data_part, data = data[:2], data[2:]
-    # while data:
-    #     beacon = {}
-    #     beacon['data'] = data_temp
-    #     flag, data = int(data[:2],16), data[2:]
-    #     beacon_flag = []
-    #     for _ in range(8):
-    #         beacon_flag.append(flag & 1)
-    #         flag >>= 1
-    #     beacon['timestamp'] = datetime.strftime(datetime.fromtimestamp(int(timestamp, 16) // 1000), '%Y.%m.%d %H:%M:%S')
-    #     beacon['beacon_flag'] = beacon_flag
-    #     if beacon_flag[5]:
-    #         beacon['uuid'], data = data[:40], data[40:]
-    #     else:
-    #         beacon['uuid'], data = data[:32], data[32:]
-    #     if beacon_flag[0]: beacon['signal_str'], data = f"-{int(data[:2], 16) % 100} dbm", data[2:]
-    #     if beacon_flag[1]: beacon['batt_v'], data = f"{data[:4]} V", data[4:]
-    #     if beacon_flag[2]: beacon['temp'], data = f"{data[:4]} C", data[4:]
-
-    # 3rd iteration Advanced (Universal) Beacons configuration (Eval 03.27.01.Rev.120) Simple
-    no_of_beacons, data = int(data[:2],16), data[2:]
-    for _ in range(no_of_beacons):
+    data_part, data = data[:2], data[2:]
+    while data:
         beacon = {}
         beacon['data'] = data_temp
-        beacon['signal_str'], data = f"-{int(data[:2], 16) % 100} dbm", data[2:]
-        id_len, data = int(data[:2],16), data[2:]
-        beacon['uuid'], data = data[:id_len*2], data[id_len*2:]
-        add_dat_len, data = id_len, data = int(data[:2],16), data[2:]
-        beacon['add_data'], data = data[:add_dat_len*2], data[add_dat_len*2:]
+        flag, data = int(data[:2],16), data[2:]
+        beacon_flag = []
+        for _ in range(8):
+            beacon_flag.append(flag & 1)
+            flag >>= 1
         beacon['timestamp'] = datetime.strftime(datetime.fromtimestamp(int(timestamp, 16) // 1000), '%Y.%m.%d %H:%M:%S')
+        beacon['beacon_flag'] = beacon_flag
+        if beacon_flag[5]:
+            beacon['uuid'], data = data[:40], data[40:]
+        else:
+            beacon['uuid'], data = data[:32], data[32:]
+        if beacon_flag[0]: beacon['signal_str'], data = f"-{int(data[:2], 16) % 100} dbm", data[2:]
+        if beacon_flag[1]: beacon['batt_v'], data = f"{data[:4]} V", data[4:]
+        if beacon_flag[2]: beacon['temp'], data = f"{data[:4]} C", data[4:]
         beacons.append(beacon)
-    return beacons
+    if not beacons:
+        return [{'data':data_temp, 'timestamp':datetime.strftime(datetime.fromtimestamp(int(timestamp, 16) // 1000), '%Y.%m.%d %H:%M:%S')}]
+    else:
+        return beacons
+
+def parse_beacon_avl_id_advanced(data, timestamp):
+    """
+    Parses BLE Beacon AVL ID 548 (Advanced mode) data. 
+
+        Parameters:
+            data (str): AVL ID 548 data parsed from the record.
+            timestamp (str): timestamp parsed from record in HEX format.
+
+        Returns:
+            beacons (list): list of dict representation of beacons parsed from
+            data.
+    """
+    data_temp = data
+    beacons = []
+    protocol_ver = data[:2]
+    if protocol_ver == '01':
+        # 03.27.04.Rev.300 Advanced
+        data = data[2:]
+        while data:
+            beacon = {}
+            beacon['data'] = data_temp
+            beacon['timestamp'] = datetime.strftime(datetime.fromtimestamp(int(timestamp, 16) // 1000), '%Y.%m.%d %H:%M:%S')
+            bec_len = int(data[:2],16) - 1
+            bec_data, data = data[2:bec_len*2 + 4], data[bec_len*2 + 4:]
+            while bec_data:
+                param_id, bec_data = bec_data[:2], bec_data[2:]
+                param_len, bec_data = int(bec_data[:2],16), bec_data[2:]
+                param_data, bec_data = bec_data[:param_len*2], bec_data[param_len*2:]
+                beacon[f'param {param_id}'] = param_data
+            beacons.append(beacon)
+    else:
+        # 3rd iteration Advanced (Universal) Beacons configuration (Eval 03.27.01.Rev.120) Simple
+        no_of_beacons, data = int(data[:2],16), data[2:]
+        # Implement handling of situation when beacon record is empty.
+        for _ in range(no_of_beacons):
+            beacon = {}
+            beacon['data'] = data_temp
+            beacon['signal_str'], data = f"-{int(data[:2], 16) % 100} dbm", data[2:]
+            id_len, data = int(data[:2],16), data[2:]
+            beacon['uuid'], data = data[:id_len*2], data[id_len*2:]
+            add_dat_len, data = id_len, data = int(data[:2],16), data[2:]
+            beacon['add_data'], data = data[:add_dat_len*2], data[add_dat_len*2:]
+            beacon['timestamp'] = datetime.strftime(datetime.fromtimestamp(int(timestamp, 16) // 1000), '%Y.%m.%d %H:%M:%S')
+            beacons.append(beacon)
+    if not beacons:
+        return [{'data':data_temp, 'timestamp':datetime.strftime(datetime.fromtimestamp(int(timestamp, 16) // 1000), '%Y.%m.%d %H:%M:%S')}]
+    else:
+        return beacons
 
 def pretty_beacon_data(beacon_data):
     data = '\n'
