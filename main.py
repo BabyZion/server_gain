@@ -384,6 +384,19 @@ class Server(QtCore.QThread):
             self.stop_auto_sending()
         self.display_info.emit(f"Connection with {imei} closed by user input.")
 
+    def beacon_test(self, recs):
+        bec_data = []
+        for rec in recs:
+            for avl_id, value in rec.items():
+                if avl_id == '0181':
+                    bec_data += parselib.parse_beacon_avl_id_simple(value, rec['timestamp'])
+                elif avl_id == '0224':
+                    bec_data += parselib.parse_beacon_avl_id_advanced(value, rec['timestamp'])
+        printable_data = ''
+        for bec in bec_data:
+            printable_data += parselib.pretty_beacon_data(bec)
+        return printable_data, bec_data
+
     def communicate(self, conn, addr):
         connected = True
         imei = None
@@ -417,16 +430,7 @@ class Server(QtCore.QThread):
                         recs = parselib.parse_record_payload(rpayload, data_no, codec)
                         # If beacon testing mode is enabled, parse and print beacon AVL data.
                         if self.beacon:
-                            bec_data = []
-                            for rec in recs:
-                                for avl_id, value in rec.items():
-                                    if avl_id == '0181':
-                                        bec_data += parselib.parse_beacon_avl_id_simple(value, rec['timestamp'])
-                                    elif avl_id == '0224':
-                                        bec_data += parselib.parse_beacon_avl_id_advanced(value, rec['timestamp'])
-                            printable_data = ''
-                            for bec in bec_data:
-                                printable_data += parselib.pretty_beacon_data(bec)
+                            printable_data, bec_data = self.beacon_test(recs)
                             if bec_data: data = printable_data
                         self.display_info.emit(f"IMEI: {imei} - {data}")
                         self.display_info.emit(f"Sending record reply: {reply}")
@@ -488,9 +492,13 @@ class Server(QtCore.QThread):
                     rpayload = pinfo['records']
                     data_no = pinfo['no_of_data_1']
                     codec = pinfo['codec']
+                    recs = parselib.parse_record_payload(rpayload, data_no, codec)
                     if codec != '0c':
                         imei = parselib.parse_imei(pinfo['imei'], False)
                         self.accept_new_connection(imei, addr)
+                        if self.beacon:
+                            printable_data, bec_data = self.beacon_test(recs)
+                            if bec_data: data = printable_data
                         self.display_info.emit(f"IMEI: {imei} - {data}")
                         self.display_info.emit(f"Sending record reply: {reply}")
                         self.logger.info(f"IMEI: {imei} - {data}")
