@@ -208,6 +208,10 @@ class Application(QtWidgets.QMainWindow):
                 self.main_window.checkBoxSSL.setChecked(True)
             elif self.settings.value('ssl') == 'false': 
                 self.main_window.checkBoxSSL.setChecked(False)
+            if self.settings.value('beacon') == 'true':
+                self.main_window.checkBoxBeacon.setChecked(True)
+            elif self.settings.value('beacon') == 'false': 
+                self.main_window.checkBoxBeacon.setChecked(False)
         except TypeError:
             pass
 
@@ -219,6 +223,7 @@ class Application(QtWidgets.QMainWindow):
         self.settings.setValue('ssl', self.main_window.checkBoxSSL.isChecked())
         self.settings.setValue('certfile', self.server.certfile)
         self.settings.setValue('keyfile', self.server.keyfile)
+        self.settings.setValue('beacon', self.main_window.checkBoxBeacon.isChecked())
 
 
 class Server(QtCore.QThread):
