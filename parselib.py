@@ -258,7 +258,7 @@ def parse_beacon_avl_id_simple(data, timestamp):
             beacon_flag.append(flag & 1)
             flag >>= 1
         beacon['timestamp'] = datetime.strftime(datetime.fromtimestamp(int(timestamp, 16) // 1000), '%Y.%m.%d %H:%M:%S')
-        beacon['beacon_flag'] = beacon_flag
+        beacon['beacon_flag'] = ''.join([str(i) for i in beacon_flag])
         if beacon_flag[5]:
             beacon['uuid'], data = data[:40], data[40:]
         else:

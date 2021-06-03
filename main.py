@@ -11,6 +11,7 @@ import binascii
 import libscrc
 from logger import Logger
 from datetime import datetime
+from database import Database
 from PyQt5 import QtWidgets, QtCore, Qt
 from window import Ui_MainWindow
 
@@ -39,6 +40,9 @@ class Application(QtWidgets.QMainWindow):
         self.server.display_info.connect(self.append_text_browser)
         self.server.new_conn.connect(self.add_conn)
         self.server.closed_conn.connect(self.del_conn)
+        self.server.to_db.connect(self.pass_to_database)
+        self.database = Database("test", "postgres", "192.168.0.24", "ridikelis")
+        self.database.display_info.connect(self.append_text_browser)
         self.logger = Logger('Application')
         self.logger.info(f"Application started.")
         self.settings = QtCore.QSettings('server_gain', 'app_settings')
@@ -72,6 +76,7 @@ class Application(QtWidgets.QMainWindow):
         self.logger.info(f'GPRS CMD {cmd} is sent to {imei}.')
 
     def start_server(self):
+        # Start server
         self.trans_prot = self.main_window.buttonGroup.checkedButton().text()
         self.port = self.main_window.spinBox.value()
         self.use_ssl = self.main_window.checkBoxSSL.isChecked()
@@ -83,6 +88,9 @@ class Application(QtWidgets.QMainWindow):
         self.server.start()
         self.append_text_browser(f"{self.trans_prot} server started on port {self.port}. SSL enabled - {self.use_ssl}.")
         self.logger.info(f"{self.trans_prot} server started on port {self.port}. SSL enabled - {self.use_ssl}.")
+        # Open connection to Database if configured.
+        if self.main_window.checkBoxBeacon.isChecked():
+            self.database.start()
 
     def stop_server(self):
         self.server.close()
@@ -154,6 +162,9 @@ class Application(QtWidgets.QMainWindow):
             self.logger.info(f"Server is entering Beacon Testing mode.")
         else:
             self.logger.info(f"Server is exiting from Beacon Testing mode.")
+
+    def pass_to_database(self, data):
+        self.database.queue.put(data)
 
     def not_implemented_warning(self):
         warn = QtWidgets.QMessageBox(self)
@@ -231,6 +242,7 @@ class Server(QtCore.QThread):
     display_info = QtCore.pyqtSignal(str)
     new_conn = QtCore.pyqtSignal(str)
     closed_conn = QtCore.pyqtSignal(str)
+    to_db = QtCore.pyqtSignal(object)
 
     IMEI_MSG_HEADER = 4
     TCP_MSG_HEADER = 16
@@ -436,7 +448,9 @@ class Server(QtCore.QThread):
                         # If beacon testing mode is enabled, parse and print beacon AVL data.
                         if self.beacon:
                             printable_data, bec_data = self.beacon_test(recs)
-                            if bec_data: data = printable_data
+                            if bec_data: 
+                                data = printable_data
+                                self.to_db.emit((imei, bec_data))
                         self.display_info.emit(f"IMEI: {imei} - {data}")
                         self.display_info.emit(f"Sending record reply: {reply}")
                         self.logger.info(f"IMEI: {imei} - {data}")
@@ -503,7 +517,9 @@ class Server(QtCore.QThread):
                         self.accept_new_connection(imei, addr)
                         if self.beacon:
                             printable_data, bec_data = self.beacon_test(recs)
-                            if bec_data: data = printable_data
+                            if bec_data: 
+                                data = printable_data
+                                self.to_db.emit((imei, bec_data))
                         self.display_info.emit(f"IMEI: {imei} - {data}")
                         self.display_info.emit(f"Sending record reply: {reply}")
                         self.logger.info(f"IMEI: {imei} - {data}")
