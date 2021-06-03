@@ -73,4 +73,4 @@ class Database(QtCore.QThread):
                 self.insert_into('beacons', d)
                 prev_ts = curr_ts
             self.logger.info(f"Successfully entered data into database - {self.dbname}")
-            self.display_info.emitf"Successfully entered data into database - {self.dbname}")
+            self.display_info.emit(f"Successfully entered data into database - {self.dbname}")
