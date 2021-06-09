@@ -67,10 +67,11 @@ class Database(QtCore.QThread):
                 curr_ts = d['timestamp']
                 if curr_ts != prev_ts:
                     i = self.insert_into('beacon_records', {'data':d['data']})
-                del d['data']
-                d['record'] = i
-                d['imei'] = imei
-                self.insert_into('beacons', d)
-                prev_ts = curr_ts
+                if d.get('uuid'):
+                    del d['data']
+                    d['record'] = i
+                    d['imei'] = imei
+                    self.insert_into('beacons', d)
+                    prev_ts = curr_ts
             self.logger.info(f"Successfully entered data into database - {self.dbname}")
             self.display_info.emit(f"Successfully entered data into database - {self.dbname}")
