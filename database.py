@@ -20,6 +20,7 @@ class Database(QtCore.QThread):
         self.connection = None
         self.cursor = None
         self.running = False
+        self.settings_changed = False
         self.queue = SimpleQueue()
         self.logger = Logger('Database')
 
@@ -40,6 +41,12 @@ class Database(QtCore.QThread):
         self.logger.info(f"Successfully connected to database - {self.dbname}")
         self.display_info.emit(f"Successfully connected to database - {self.dbname}")
 
+    def disconnect(self):
+        self.cursor.close()
+        self.connection.close()
+        self.logger.info(f"Disconnected from database - {self.dbname}")
+        self.display_info.emit(f"Disconnected from database - {self.dbname}")
+
     def insert_into(self, table, data):
         columns = data.keys()
         values = data.values()
@@ -50,6 +57,24 @@ class Database(QtCore.QThread):
         self.connection.commit()
         return ent_id
 
+    def __insert_beacons_to_db(self, data):
+        imei = data[0]
+        curr_ts = None
+        prev_ts = None
+        i = None
+        for d in data[1]:
+            curr_ts = d['timestamp']
+            if curr_ts != prev_ts:
+                i = self.insert_into('beacon_records', {'data':d['data']})
+            if d.get('uuid'):
+                del d['data']
+                d['record'] = i
+                d['imei'] = imei
+                self.insert_into('beacons', d)
+                prev_ts = curr_ts
+        self.logger.info(f"Successfully entered data into database - {self.dbname}")
+        self.display_info.emit(f"Successfully entered data into database - {self.dbname}")
+
     def run(self):
         self.logger.info(f"Main database settings: dbname='{self.dbname}' user='{self.user}'"
         f" host='{self.host}' password='{self.password}'")
@@ -58,20 +83,10 @@ class Database(QtCore.QThread):
         self.connect()
         self.running = True
         while self.running:
-            data = self.queue.get()
-            imei = data[0]
-            curr_ts = None
-            prev_ts = None
-            i = None
-            for d in data[1]:
-                curr_ts = d['timestamp']
-                if curr_ts != prev_ts:
-                    i = self.insert_into('beacon_records', {'data':d['data']})
-                if d.get('uuid'):
-                    del d['data']
-                    d['record'] = i
-                    d['imei'] = imei
-                    self.insert_into('beacons', d)
-                    prev_ts = curr_ts
-            self.logger.info(f"Successfully entered data into database - {self.dbname}")
-            self.display_info.emit(f"Successfully entered data into database - {self.dbname}")
+            if self.settings_changed:
+                self.disconnect()
+                self.connect()
+                self.settings_changed = False
+            else:
+                data = self.queue.get()
+                self.__insert_beacons_to_db(data)
