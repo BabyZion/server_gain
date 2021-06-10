@@ -309,7 +309,15 @@
     <addaction name="actionSelectCert"/>
     <addaction name="actionCreateCert"/>
    </widget>
+   <widget class="QMenu" name="menuDatabase">
+    <property name="title">
+     <string>Database</string>
+    </property>
+    <addaction name="separator"/>
+    <addaction name="actionDatabaseSettings"/>
+   </widget>
    <addaction name="menuCertfiles"/>
+   <addaction name="menuDatabase"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionSelectCert">
@@ -326,6 +334,11 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+C</string>
+   </property>
+  </action>
+  <action name="actionDatabaseSettings">
+   <property name="text">
+    <string>Settings</string>
    </property>
   </action>
  </widget>

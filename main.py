@@ -14,6 +14,7 @@ from datetime import datetime
 from database import Database
 from PyQt5 import QtWidgets, QtCore, Qt
 from window import Ui_MainWindow
+from dbSettings import Ui_dbSettings
 
 __version__ = '1.2'
 
@@ -21,6 +22,7 @@ class Application(QtWidgets.QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self.settings = QtCore.QSettings('server_gain', 'app_settings')
         self.main_window = Ui_MainWindow()
         self.main_window.setupUi(self)
         self.main_window.pushButtonSend.pressed.connect(self.send_gprs_cmd)
@@ -32,8 +34,10 @@ class Application(QtWidgets.QMainWindow):
         self.main_window.checkBoxBeacon.toggled.connect(self.beacon_test)
         self.main_window.actionSelectCert.triggered.connect(self.select_certs)
         self.main_window.actionCreateCert.triggered.connect(self.not_implemented_warning)
+        self.main_window.actionDatabaseSettings.triggered.connect(self.db_settings)
         self.__change_server_widget_state(self.main_window.horizontalLayout_2)
         self.main_window.pushButtonDisconnect.setEnabled(False)
+        self.databaseSettingsWindow = None
         self.show()
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
         self.server = Server()
@@ -41,11 +45,11 @@ class Application(QtWidgets.QMainWindow):
         self.server.new_conn.connect(self.add_conn)
         self.server.closed_conn.connect(self.del_conn)
         self.server.to_db.connect(self.pass_to_database)
-        self.database = Database("test", "postgres", "192.168.0.24", "ridikelis")
+        self.database = Database(self.settings.value('dbname'), self.settings.value('user'),
+            self.settings.value('host'), self.settings.value('password'))
         self.database.display_info.connect(self.append_text_browser)
         self.logger = Logger('Application')
         self.logger.info(f"Application started.")
-        self.settings = QtCore.QSettings('server_gain', 'app_settings')
         self.__load_settings()
         self.server_settings_widgets = [self.main_window.labelPort, self.main_window.spinBox,
             self.main_window.radioButtonTCP, self.main_window.radioButtonUDP, self.main_window.checkBoxSSL]
@@ -155,6 +159,10 @@ class Application(QtWidgets.QMainWindow):
             self.append_text_browser(f'Certificates selected - \nCertfile: {self.server.certfile}'
                 f'\nKeyfile: {self.server.keyfile}')
 
+    def db_settings(self):
+        self.databaseSettingsWindow = DatabaseSettings(self.database)
+        self.databaseSettingsWindow.show()
+
     def beacon_test(self):
         checked = self.main_window.checkBoxBeacon.isChecked()
         self.server.beacon = checked
@@ -235,6 +243,31 @@ class Application(QtWidgets.QMainWindow):
         self.settings.setValue('certfile', self.server.certfile)
         self.settings.setValue('keyfile', self.server.keyfile)
         self.settings.setValue('beacon', self.main_window.checkBoxBeacon.isChecked())
+        self.settings.setValue('dbname', self.database.dbname)
+        self.settings.setValue('user', self.database.user)
+        self.settings.setValue('host', self.database.host)
+        self.settings.setValue('password', self.database.password)
+
+
+class DatabaseSettings(QtWidgets.QDialog):
+    
+    def __init__(self, db):
+        super().__init__()
+        self.settings_window = Ui_dbSettings()
+        self.settings_window.setupUi(self)
+        self.db = db
+        self.settings_window.databaseNameLineEdit.setText(self.db.dbname)
+        self.settings_window.userLineEdit.setText(self.db.user)
+        self.settings_window.hostLineEdit.setText(self.db.host)
+        self.settings_window.passwordLineEdit.setText(self.db.password)
+
+    def accept(self):
+        self.db.dbname = self.settings_window.databaseNameLineEdit.text()
+        self.db.user = self.settings_window.userLineEdit.text()
+        self.db.host = self.settings_window.hostLineEdit.text()
+        self.db.password = self.settings_window.passwordLineEdit.text()
+        self.db.settings_changed = True
+        self.done(1)
 
 
 class Server(QtCore.QThread):
