@@ -267,7 +267,9 @@ class DatabaseSettings(QtWidgets.QDialog):
         self.db.host = self.settings_window.hostLineEdit.text()
         self.db.password = self.settings_window.passwordLineEdit.text()
         if self.db.running:
-            self.db.settings_changed = True
+            self.hide()
+            self.db.disconnect()
+            self.db.connect()
         self.done(1)
 
 

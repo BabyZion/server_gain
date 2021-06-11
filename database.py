@@ -83,10 +83,5 @@ class Database(QtCore.QThread):
         self.connect()
         self.running = True
         while self.running:
-            if self.settings_changed:
-                self.disconnect()
-                self.connect()
-                self.settings_changed = False
-            else:
-                data = self.queue.get()
-                self.__insert_beacons_to_db(data)
+            data = self.queue.get()
+            self.__insert_beacons_to_db(data)
