@@ -20,6 +20,7 @@ class Database(QtCore.QThread):
         self.connection = None
         self.cursor = None
         self.running = False
+        self.connected = False
         self.settings_changed = False
         self.queue = SimpleQueue()
         self.logger = Logger('Database')
@@ -28,18 +29,28 @@ class Database(QtCore.QThread):
         self.logger.info(f"Trying to connect to {self.host}")
         self.display_info.emit(f"Trying to connect to {self.host}")
         args = f"dbname='{self.dbname}' user='{self.user}' host='{self.host}' password='{self.password}'"
-        self.connection = psycopg2.connect(args)
-        # This allows connection to raise psycopg2.OperationalError when database becomes unavailable
-        # during transaction. Othervise, transaction hangs on cursor operations.
-        s = socket.fromfd(self.connection.fileno(), socket.AF_INET, socket.SOCK_STREAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 6)
-        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 2)
-        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 2)
-        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, 5000)
-        self.cursor = self.connection.cursor()
-        self.logger.info(f"Successfully connected to database - {self.dbname}")
-        self.display_info.emit(f"Successfully connected to database - {self.dbname}")
+        try:
+            self.connection = psycopg2.connect(args)
+            # This allows connection to raise psycopg2.OperationalError when database becomes unavailable
+            # during transaction. Othervise, transaction hangs on cursor operations. 
+            # FOR UNIX TYPE MACHINES ONLY
+            try:
+                s = socket.fromfd(self.connection.fileno(), socket.AF_INET, socket.SOCK_STREAM)
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 6)
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 2)
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 2)
+                s.setsockopt(socket.IPPROTO_TCP, socket.TCP_USER_TIMEOUT, 5000)
+            except AttributeError:
+                pass
+            self.cursor = self.connection.cursor()
+            self.connected = True
+            self.logger.info(f"Successfully connected to database - {self.dbname}")
+            self.display_info.emit(f"Successfully connected to database - {self.dbname}")
+        except psycopg2.OperationalError as e:
+            self.connected = False
+            self.logger.info(f"Unable to connect to database - {e}")
+            self.display_info.emit(f"Unable to connect to database - {e}")
 
     def disconnect(self):
         self.cursor.close()
@@ -52,10 +63,19 @@ class Database(QtCore.QThread):
         values = data.values()
         insert_que = f"INSERT INTO {table} (%s) VALUES %s RETURNING id"
         # print(self.cursor.mogrify(insert_que, (psycopg2.extensions.AsIs(','.join(columns)), tuple(values))))
-        self.cursor.execute(insert_que, (psycopg2.extensions.AsIs(','.join(columns)), tuple(values)))
-        ent_id = self.cursor.fetchone()[0]
-        self.connection.commit()
-        return ent_id
+        if self.connected:
+            try:
+                self.cursor.execute(insert_que, (psycopg2.extensions.AsIs(','.join(columns)), tuple(values)))
+                ent_id = self.cursor.fetchone()[0]
+                self.connection.commit()
+                return ent_id
+            except psycopg2.OperationalError as e:
+                self.connected = False
+                self.logger.info(f"Unable to add data to database - {e}")
+                self.display_info.emit(f"Unable to add data to database - {e}")
+        if not self.connected:
+            # Insert into backup file
+            pass
 
     def __insert_beacons_to_db(self, data):
         imei = data[0]
