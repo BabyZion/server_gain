@@ -79,26 +79,51 @@ class Database(QtCore.QThread):
         curr_ts = None
         prev_ts = None
         i = None
+        backup = {'rec':'', 'beacons':[]}
         for d in data[1]:
             curr_ts = d['timestamp']
             if curr_ts != prev_ts:
+                # Write backup to file if backup is present.
+                if backup['rec'] or backup['beacons']:
+                    self.__to_backup(backup)
+                    backup = {'rec':'', 'beacons':[]}
                 if self.connected:
                     i = self.insert_into('beacon_records', {'data':d['data']})
                 if not self.connected:
                     # Insert to sql backup file.
-                    print("INSERT BEACON RECSz")
+                    backup['rec'] = f"INSERT INTO beacon_records (data) VALUES ('{d['data']}') RETURNING id INTO beacid;"
             if d.get('uuid'):
                 del d['data']
                 d['imei'] = imei
-                d['record'] = i
                 if self.connected:
+                    d['record'] = i
                     self.insert_into('beacons', d)
                 if not self.connected:
                     # Insert to sql backup file.
-                    print("INSERT BEACONS")
-                prev_ts = curr_ts
+                    d['record'] = 'beacid' if backup['rec'] else str(i)
+                    columns = ''
+                    values = ''
+                    for k,v in d.items():
+                        columns += f"{k}, "
+                        if v == "beacid":
+                            values += f"{v},"
+                        else:
+                            values += f"'{v}',"
+                    columns = columns.strip()[:-1]
+                    values = values.strip()[:-1]
+                    # columns = tuple(d.keys())
+                    # values = tuple(d.values())
+                    insert_que = f"INSERT INTO beacons ({columns}) VALUES ({values});"
+                    backup['beacons'].append(insert_que)
+            prev_ts = curr_ts
         self.logger.info(f"Successfully entered data into database - {self.dbname}")
         self.display_info.emit(f"Successfully entered data into database - {self.dbname}")
+
+    def __to_backup(self, backup):
+        insert_que = backup['rec'] + '\n' + '\n'.join(backup['beacons'])
+        sql_cmd = f"DO $$DECLARE beacid integer; BEGIN {insert_que} END $$;"
+        with open('backup.sql', 'a') as f:
+            f.write(sql_cmd + '\n')
 
     def run(self):
         self.logger.info(f"Main database settings: dbname='{self.dbname}' user='{self.user}'"
