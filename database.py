@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import os
 import psycopg2
 import socket
 from logger import Logger
@@ -63,19 +64,15 @@ class Database(QtCore.QThread):
         values = data.values()
         insert_que = f"INSERT INTO {table} (%s) VALUES %s RETURNING id"
         # print(self.cursor.mogrify(insert_que, (psycopg2.extensions.AsIs(','.join(columns)), tuple(values))))
-        if self.connected:
-            try:
-                self.cursor.execute(insert_que, (psycopg2.extensions.AsIs(','.join(columns)), tuple(values)))
-                ent_id = self.cursor.fetchone()[0]
-                self.connection.commit()
-                return ent_id
-            except psycopg2.OperationalError as e:
-                self.connected = False
-                self.logger.info(f"Unable to add data to database - {e}")
-                self.display_info.emit(f"Unable to add data to database - {e}")
-        if not self.connected:
-            # Insert into backup file
-            pass
+        try:
+            self.cursor.execute(insert_que, (psycopg2.extensions.AsIs(','.join(columns)), tuple(values)))
+            ent_id = self.cursor.fetchone()[0]
+            self.connection.commit()
+            return ent_id
+        except psycopg2.OperationalError as e:
+            self.connected = False
+            self.logger.info(f"Unable to add data to database - {e}")
+            self.display_info.emit(f"Unable to add data to database - {e}")
 
     def __insert_beacons_to_db(self, data):
         imei = data[0]
@@ -85,12 +82,20 @@ class Database(QtCore.QThread):
         for d in data[1]:
             curr_ts = d['timestamp']
             if curr_ts != prev_ts:
-                i = self.insert_into('beacon_records', {'data':d['data']})
+                if self.connected:
+                    i = self.insert_into('beacon_records', {'data':d['data']})
+                if not self.connected:
+                    # Insert to sql backup file.
+                    print("INSERT BEACON RECSz")
             if d.get('uuid'):
                 del d['data']
-                d['record'] = i
                 d['imei'] = imei
-                self.insert_into('beacons', d)
+                d['record'] = i
+                if self.connected:
+                    self.insert_into('beacons', d)
+                if not self.connected:
+                    # Insert to sql backup file.
+                    print("INSERT BEACONS")
                 prev_ts = curr_ts
         self.logger.info(f"Successfully entered data into database - {self.dbname}")
         self.display_info.emit(f"Successfully entered data into database - {self.dbname}")
