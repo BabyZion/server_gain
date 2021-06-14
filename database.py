@@ -49,6 +49,7 @@ class Database(QtCore.QThread):
             self.connected = True
             self.logger.info(f"Successfully connected to database - {self.dbname}")
             self.display_info.emit(f"Successfully connected to database - {self.dbname}")
+            self.__insert_backup_to_db()
         except psycopg2.OperationalError as e:
             self.connected = False
             threading.Timer(10, self.connect).start()
@@ -82,6 +83,7 @@ class Database(QtCore.QThread):
         curr_ts = None
         prev_ts = None
         i = None
+        succsess = True
         backup = {'rec':'', 'beacons':[]}
         for d in data[1]:
             curr_ts = d['timestamp']
@@ -95,6 +97,7 @@ class Database(QtCore.QThread):
                 if not self.connected:
                     # Insert to sql backup file.
                     backup['rec'] = f"INSERT INTO beacon_records (data) VALUES ('{d['data']}') RETURNING id INTO beacid;"
+                    succsess = False
             if d.get('uuid'):
                 del d['data']
                 d['imei'] = imei
@@ -118,15 +121,28 @@ class Database(QtCore.QThread):
                     # values = tuple(d.values())
                     insert_que = f"INSERT INTO beacons ({columns}) VALUES ({values});"
                     backup['beacons'].append(insert_que)
+                    succsess = False
             prev_ts = curr_ts
-        self.logger.info(f"Successfully entered data into database - {self.dbname}")
-        self.display_info.emit(f"Successfully entered data into database - {self.dbname}")
-
+        return succsess
+        
     def __to_backup(self, backup):
         insert_que = backup['rec'] + '\n' + '\n'.join(backup['beacons'])
         sql_cmd = f"DO $$DECLARE beacid integer; BEGIN {insert_que} END $$;"
         with open('backup.sql', 'a') as f:
             f.write(sql_cmd + '\n')
+
+    def __insert_backup_to_db(self):
+        if self.connected and os.stat('backup.sql').st_size > 0:
+            self.logger.info(f"Backup file is not empty. Entering backup data to database - {self.dbname}")
+            self.display_info.emit(f"Backup file is not empty. Entering backup data to database - {self.dbname}")
+            try:
+                self.cursor.execute(open("backup.sql", "r").read())
+                open('backup.sql', 'w').close()
+                self.logger.info(f"Successfully entered backup data to database - {self.dbname}")
+                self.display_info.emit(f"Successfully entered backup data to database - {self.dbname}")
+            except psycopg2.OperationalError as e:
+                self.logger.info(f"Unable to add BACKUP to database - {e}")
+                self.display_info.emit(f"Unable to add BACKUP to database - {e}")
 
     def run(self):
         self.logger.info(f"Main database settings: dbname='{self.dbname}' user='{self.user}'"
@@ -137,4 +153,10 @@ class Database(QtCore.QThread):
         self.running = True
         while self.running:
             data = self.queue.get()
-            self.__insert_beacons_to_db(data)
+            result = self.__insert_beacons_to_db(data)
+            if result:
+                self.logger.info(f"Successfully entered data into database - {self.dbname}")
+                self.display_info.emit(f"Successfully entered data into database - {self.dbname}")
+            else:
+                self.logger.info(f"Data saved to backup file - backup.sql")
+                self.display_info.emit(f"Data saved to backup file - backup.sql")
