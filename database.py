@@ -3,6 +3,7 @@
 import os
 import psycopg2
 import socket
+import threading
 from logger import Logger
 from PyQt5 import QtCore
 from queue import SimpleQueue
@@ -22,7 +23,6 @@ class Database(QtCore.QThread):
         self.cursor = None
         self.running = False
         self.connected = False
-        self.settings_changed = False
         self.queue = SimpleQueue()
         self.logger = Logger('Database')
 
@@ -30,6 +30,7 @@ class Database(QtCore.QThread):
         self.logger.info(f"Trying to connect to {self.host}")
         self.display_info.emit(f"Trying to connect to {self.host}")
         args = f"dbname='{self.dbname}' user='{self.user}' host='{self.host}' password='{self.password}'"
+        "'connect_timeout'=3 'keepalives'=1 'keepalives_idle'=5 'keepalives_interval'=2 'keepalives_count'=2"
         try:
             self.connection = psycopg2.connect(args)
             # This allows connection to raise psycopg2.OperationalError when database becomes unavailable
@@ -50,8 +51,9 @@ class Database(QtCore.QThread):
             self.display_info.emit(f"Successfully connected to database - {self.dbname}")
         except psycopg2.OperationalError as e:
             self.connected = False
+            threading.Timer(10, self.connect).start()
             self.logger.info(f"Unable to connect to database - {e}")
-            self.display_info.emit(f"Unable to connect to database - {e}")
+            self.display_info.emit(f"Unable to connect to database - {e}")     
 
     def disconnect(self):
         self.cursor.close()
@@ -71,6 +73,7 @@ class Database(QtCore.QThread):
             return ent_id
         except psycopg2.OperationalError as e:
             self.connected = False
+            threading.Timer(10, self.connect).start()
             self.logger.info(f"Unable to add data to database - {e}")
             self.display_info.emit(f"Unable to add data to database - {e}")
 
