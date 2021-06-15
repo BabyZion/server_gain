@@ -102,13 +102,13 @@ class Database(QtCore.QThread):
                     self.__to_backup(backup)
                     backup = {'rec':'', 'beacons':[]}
                 if self.connected:
-                    i = self.insert_into('beacon_records', {'data':d['data']})
+                    i = self.insert_into('beacon_records', {'data':d['data'], 'timestamp':d['timestamp']})
                 if not self.connected:
                     # Insert to sql backup file.
                     backup['rec'] = f"INSERT INTO beacon_records (data) VALUES ('{d['data']}') RETURNING id INTO beacid;"
                     succsess = False
             if d.get('uuid'):
-                del d['data']
+                del d['data'], d['timestamp']
                 d['imei'] = imei
                 if self.connected:
                     d['record'] = i
