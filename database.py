@@ -78,6 +78,15 @@ class Database(QtCore.QThread):
             self.logger.info(f"Unable to add data to database - {e}")
             self.display_info.emit(f"Unable to add data to database - {e}")
 
+    def request(self, req):
+        if self.connected:
+            try:
+                self.cursor.execute(req)
+                data = self.cursor.fetchall()
+                return data
+            except psycopg2.OperationalError as e:
+                self.connected = False
+
     def __insert_beacons_to_db(self, data):
         imei = data[0]
         curr_ts = None
