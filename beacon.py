@@ -1,21 +1,25 @@
 import datetime
+import threading
 from PyQt5 import QtCore
 
 
 class Beacon(QtCore.QThread):
 
     def __init__(self, database, test_devices=None, check_period=None):
+        super().__init__()
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
         self.db = database
         # self.checkpoint = datetime.datetime.strftime(datetime.datetime.now(), self.time_format)
-        self.checkpoint = datetime.datetime.strftime(datetime.datetime.now(), self.time_format)
-        self.start_time = datetime.datetime.strftime(datetime.datetime.now(), self.time_format)
+        self.checkpoint = datetime.datetime.now()
+        self.start_time = datetime.datetime.now()
+        self.check_for_devices = True if not test_devices else False
         self.test_devices = test_devices
         self.check_period = check_period
         
     def update_test_devices(self):
         # req = f"SELECT DISTINCT imei FROM beacons WHERE timestamp > '{self.start_time}';"
-        req = f"SELECT DISTINCT imei FROM beacon_records WHERE timestamp >= '{self.checkpoint}';"
+        checkpoint = datetime.datetime.strftime(self.checkpoint, self.time_format)
+        req = f"SELECT DISTINCT imei FROM beacon_records WHERE timestamp >= '{checkpoint}';"
         imeis = self.db.request(req)
         if imeis:
             self.test_devices = []
@@ -24,9 +28,8 @@ class Beacon(QtCore.QThread):
                     self.test_devices.append(i[0])
 
     def get_device_data(self):
-        temp_test_devices = [f"'{i}'" for i in self.test_devices]
-        devices = ','.join(temp_test_devices)
-        req = f"SELECT imei, uuid, timestamp, signal_str, beacon_records.id FROM beacon_records FULL OUTER JOIN beacons ON beacon_records.id = beacons.record WHERE timestamp >= '{self.checkpoint}';"
+        checkpoint = datetime.datetime.strftime(self.checkpoint, self.time_format)
+        req = f"SELECT imei, uuid, timestamp, signal_str, beacon_records.id FROM beacon_records FULL OUTER JOIN beacons ON beacon_records.id = beacons.record WHERE timestamp >= '{checkpoint}';"
         data = self.db.request(req)
         test_data = []
         for datum in data:
@@ -62,9 +65,16 @@ class Beacon(QtCore.QThread):
                         beac['avg_rssi'] = 0
         return results
 
-    def run(self):
+    def __query_and_calc(self):
+        if self.check_for_devices:
+            self.update_test_devices()
+        res = self.get_device_data()
+        res = self.calc_stats(res)
+        self.checkpoint = datetime.datetime.now()
+        threading.Timer(self.check_period, self.__query_and_calc).start()
+
+    def __pretty_stats(self, stats):
         pass
 
-a = Beacon('s')
-a.test_devices = ['352625690177041']
-print(a.get_device_data())
+    def run(self):
+        threading.Timer(self.check_period, self.__query_and_calc).start()
