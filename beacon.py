@@ -28,6 +28,12 @@ class Beacon(QtCore.QThread):
         devices = ','.join(temp_test_devices)
         req = f"SELECT imei, uuid, timestamp, signal_str, beacon_records.id FROM beacon_records FULL OUTER JOIN beacons ON beacon_records.id = beacons.record WHERE timestamp >= '{self.checkpoint}';"
         data = self.db.request(req)
+        test_data = []
+        for datum in data:
+            for device in self.test_devices:
+                if device in datum:
+                    test_data.append(datum)
+        data = test_data
         data = sorted(data, key=lambda x:x[4])
         return data
 
@@ -58,3 +64,7 @@ class Beacon(QtCore.QThread):
 
     def run(self):
         pass
+
+a = Beacon('s')
+a.test_devices = ['352625690177041']
+print(a.get_device_data())
