@@ -1,9 +1,12 @@
 import datetime
 import threading
+from logger import Logger
 from PyQt5 import QtCore
 
 
 class Beacon(QtCore.QThread):
+
+    display_info = QtCore.pyqtSignal(str)
 
     def __init__(self, database, test_devices=None, check_period=None):
         super().__init__()
@@ -15,6 +18,8 @@ class Beacon(QtCore.QThread):
         self.check_for_devices = True if not test_devices else False
         self.test_devices = test_devices
         self.check_period = check_period
+        self.logger = Logger('Beacon Test')
+
         
     def update_test_devices(self):
         # req = f"SELECT DISTINCT imei FROM beacons WHERE timestamp > '{self.start_time}';"
@@ -26,6 +31,11 @@ class Beacon(QtCore.QThread):
             for i in imeis:
                 if i[0]:
                     self.test_devices.append(i[0])
+            self.logger.info(f"Successfully updated participating device list.")
+            self.display_info.emit(f"Successfully updated participating device list.")
+        else:
+            self.logger.error(f"Couldn't update participating device list.")
+            self.display_info.emit(f"Couldn't update participating device list.")
 
     def get_device_data(self):
         checkpoint = datetime.datetime.strftime(self.checkpoint, self.time_format)
@@ -70,11 +80,39 @@ class Beacon(QtCore.QThread):
             self.update_test_devices()
         res = self.get_device_data()
         res = self.calc_stats(res)
+        self.logger.info(self.__pretty_stats(res))
+        self.display_info.emit(self.__pretty_stats(res))
         self.checkpoint = datetime.datetime.now()
+        self.logger.info(f"Checkpoint is updated to {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
+        self.display_info.emit(f"Checkpoint is updated to {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
         threading.Timer(self.check_period, self.__query_and_calc).start()
 
     def __pretty_stats(self, stats):
-        pass
+        text = f'Periodic ({self.check_period} s.) Beacon Test results:\n\n'
+        # import pdb; pdb.set_trace()
+        for imei, beac in stats.items():
+            text += f"{imei}:\n"
+            for uuid, b in beac.items():
+                if type(b) == dict:
+                    if not uuid: uuid = "Empty"
+                    text += f"{uuid}:\n"
+                    text += f"Avg. Signal Strength: {b['avg_rssi']} dBm\n"
+                    text += f"Visibility: {len(beac['all_ts']) - len(b['missing'])}/{len(beac['all_ts'])}\n"
+                    text += f"Percentage %: {b['visible_pct']}\n"
+                    text += "Missing:\n"
+                    if b['missing']:
+                        try:
+                            for i in range(5):
+                                text += f"{datetime.datetime.strftime(b['missing'][i], self.time_format)}\n"
+                        except IndexError:
+                            pass
+                        text += "...\n"
+                    else:
+                        text += "None\n"
+                text += '\n'
+        return text
 
     def run(self):
+        self.logger.info(f"Test has been started. Period: {self.check_period}")
+        self.display_info.emit(f"Test has been started. Period: {self.check_period}")
         threading.Timer(self.check_period, self.__query_and_calc).start()
