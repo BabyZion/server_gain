@@ -9,6 +9,7 @@ import time
 import threading
 import binascii
 import libscrc
+from beacon import Beacon
 from logger import Logger
 from datetime import datetime
 from database import Database
@@ -48,6 +49,8 @@ class Application(QtWidgets.QMainWindow):
         self.database = Database(self.settings.value('dbname'), self.settings.value('user'),
             self.settings.value('host'), self.settings.value('password'))
         self.database.display_info.connect(self.append_text_browser)
+        self.beacon = Beacon(self.database, None, 10)
+        self.beacon.display_info.connect(self.append_text_browser)
         self.logger = Logger('Application')
         self.logger.info(f"Application started.")
         self.__load_settings()
@@ -95,6 +98,7 @@ class Application(QtWidgets.QMainWindow):
         # Open connection to Database if configured.
         if self.main_window.checkBoxBeacon.isChecked():
             self.database.start()
+            self.beacon.start()
 
     def stop_server(self):
         self.server.close()
