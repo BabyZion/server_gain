@@ -86,6 +86,9 @@ class Database(QtCore.QThread):
                 return data
             except psycopg2.OperationalError as e:
                 self.connected = False
+            except psycopg2.ProgrammingError as e:
+                self.logger.info(f"Unable to execute the request - {e}")
+                self.display_info.emit(f"Unable to execute the request - {e}")
 
     def __insert_beacons_to_db(self, data):
         imei = data[0]
