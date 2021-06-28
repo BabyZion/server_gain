@@ -53,13 +53,13 @@ class Database(QtCore.QThread):
         except psycopg2.OperationalError as e:
             self.connected = False
             threading.Timer(10, self.connect).start()
-            self.logger.info(f"Unable to connect to database - {e}")
+            self.logger.error(f"Unable to connect to database - {e}")
             self.display_info.emit(f"Unable to connect to database - {e}")     
 
     def disconnect(self):
         self.cursor.close()
         self.connection.close()
-        self.logger.info(f"Disconnected from database - {self.dbname}")
+        self.logger.warning(f"Disconnected from database - {self.dbname}")
         self.display_info.emit(f"Disconnected from database - {self.dbname}")
 
     def insert_into(self, table, data):
@@ -75,7 +75,7 @@ class Database(QtCore.QThread):
         except psycopg2.OperationalError as e:
             self.connected = False
             threading.Timer(10, self.connect).start()
-            self.logger.info(f"Unable to add data to database - {e}")
+            self.logger.error(f"Unable to add data to database - {e}")
             self.display_info.emit(f"Unable to add data to database - {e}")
 
     def request(self, req):
@@ -87,7 +87,7 @@ class Database(QtCore.QThread):
             except psycopg2.OperationalError as e:
                 self.connected = False
             except psycopg2.ProgrammingError as e:
-                self.logger.info(f"Unable to execute the request - {e}")
+                self.logger.error(f"Unable to execute the request - {e}")
                 self.display_info.emit(f"Unable to execute the request - {e}")
 
     def __insert_beacons_to_db(self, data):
@@ -152,7 +152,7 @@ class Database(QtCore.QThread):
                 self.logger.info(f"Successfully entered backup data to database - {self.dbname}")
                 self.display_info.emit(f"Successfully entered backup data to database - {self.dbname}")
             except psycopg2.OperationalError as e:
-                self.logger.info(f"Unable to add BACKUP to database - {e}")
+                self.logger.error(f"Unable to add BACKUP to database - {e}")
                 self.display_info.emit(f"Unable to add BACKUP to database - {e}")
 
     def run(self):
@@ -169,5 +169,5 @@ class Database(QtCore.QThread):
                 self.logger.info(f"Successfully entered data into database - {self.dbname}")
                 self.display_info.emit(f"Successfully entered data into database - {self.dbname}")
             else:
-                self.logger.info(f"Data saved to backup file - backup.sql")
+                self.logger.warning(f"Data saved to backup file - backup.sql")
                 self.display_info.emit(f"Data saved to backup file - backup.sql")
