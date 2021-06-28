@@ -80,11 +80,16 @@ class Beacon(QtCore.QThread):
             self.update_test_devices()
         res = self.get_device_data()
         res = self.calc_stats(res)
-        self.logger.info(self.__pretty_stats(res))
-        self.display_info.emit(self.__pretty_stats(res))
-        self.checkpoint = datetime.datetime.now()
-        self.logger.info(f"Checkpoint is updated to {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
-        self.display_info.emit(f"Checkpoint is updated to {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
+        if res:
+            self.logger.info(self.__pretty_stats(res))
+            self.display_info.emit(self.__pretty_stats(res))
+            self.checkpoint = datetime.datetime.now()
+            self.logger.info(f"Checkpoint is updated to {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
+            self.display_info.emit(f"Checkpoint is updated to {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
+        else:
+            self.logger.warning(f"Couldn't gather statistics. Checkpoint remains at {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
+            self.display_info.emit(f"Couldn't gather statistics. Checkpoint remains at {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
+        
         threading.Timer(self.check_period, self.__query_and_calc).start()
 
     def __pretty_stats(self, stats):
