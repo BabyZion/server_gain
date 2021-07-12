@@ -11,6 +11,7 @@ class Beacon(QtCore.QThread):
     def __init__(self, database, test_devices=None, check_period=None):
         super().__init__()
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
+        self.file_time_format = '%Y_%m_%d-%H_%M_%S'
         self.db = database
         # self.checkpoint = datetime.datetime.strftime(datetime.datetime.now(), self.time_format)
         self.checkpoint = datetime.datetime.now()
@@ -124,6 +125,9 @@ class Beacon(QtCore.QThread):
         self.timer.cancel()
 
     def run(self):
+        # Creating test and "missing" files for the test.
+        open(f'test_{datetime.datetime.strftime(self.start_time, self.file_time_format)}.csv', 'w').close()
+        open(f'missing_{datetime.datetime.strftime(self.start_time, self.file_time_format)}.csv', 'w').close()
         self.logger.info(f"Test has been started. Period: {self.check_period}")
         self.display_info.emit(f"Test has been started. Period: {self.check_period}")
         self.running = True
