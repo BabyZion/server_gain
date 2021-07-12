@@ -18,6 +18,8 @@ class Beacon(QtCore.QThread):
         self.check_for_devices = True if not test_devices else False
         self.test_devices = test_devices
         self.check_period = check_period
+        self.running = False
+        self.timer = threading.Timer(self.check_period, self.__query_and_calc)
         self.logger = Logger('Beacon Test')
 
         
@@ -89,8 +91,8 @@ class Beacon(QtCore.QThread):
         else:
             self.logger.warning(f"Couldn't gather statistics. Checkpoint remains at {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
             self.display_info.emit(f"Couldn't gather statistics. Checkpoint remains at {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
-        
-        threading.Timer(self.check_period, self.__query_and_calc).start()
+        self.timer = threading.Timer(self.check_period, self.__query_and_calc)
+        if self.running: self.timer.start()
 
     def __pretty_stats(self, stats):
         text = f'Periodic ({self.check_period} s.) Beacon Test results:\n\n'
@@ -117,7 +119,12 @@ class Beacon(QtCore.QThread):
                 text += '\n'
         return text
 
+    def stop(self):
+        self.running = False
+        self.timer.cancel()
+
     def run(self):
         self.logger.info(f"Test has been started. Period: {self.check_period}")
         self.display_info.emit(f"Test has been started. Period: {self.check_period}")
-        threading.Timer(self.check_period, self.__query_and_calc).start()
+        self.running = True
+        self.timer.start()

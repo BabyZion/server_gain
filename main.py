@@ -49,7 +49,7 @@ class Application(QtWidgets.QMainWindow):
         self.database = Database(self.settings.value('dbname'), self.settings.value('user'),
             self.settings.value('host'), self.settings.value('password'))
         self.database.display_info.connect(self.append_text_browser)
-        self.beacon = Beacon(self.database, None, 10)
+        self.beacon = Beacon(self.database, None, 60)
         self.beacon.display_info.connect(self.append_text_browser)
         self.logger = Logger('Application')
         self.logger.info(f"Application started.")
@@ -101,6 +101,8 @@ class Application(QtWidgets.QMainWindow):
             self.beacon.start()
 
     def stop_server(self):
+        self.database.stop()
+        self.beacon.stop()
         self.server.close()
         if self.main_window.checkBox.isChecked():
             self.main_window.checkBox.setChecked(False)
@@ -188,6 +190,7 @@ class Application(QtWidgets.QMainWindow):
         ret_val = warn.exec_()
 
     def closeEvent(self, event):
+        self.stop_server()
         self.__save_settings()
 
     def __change_server_widget_state(self, layout):

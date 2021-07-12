@@ -155,6 +155,14 @@ class Database(QtCore.QThread):
                 self.logger.error(f"Unable to add BACKUP to database - {e}")
                 self.display_info.emit(f"Unable to add BACKUP to database - {e}")
 
+    def stop(self):
+        # Look for alternative way to wait for queue to become empty.
+        while not self.queue.empty():
+            pass
+        self.queue.put(None)
+        self.running = False
+        self.disconnect()
+
     def run(self):
         self.logger.info(f"Main database settings: dbname='{self.dbname}' user='{self.user}'"
         f" host='{self.host}' password='{self.password}'")
@@ -164,10 +172,13 @@ class Database(QtCore.QThread):
         self.running = True
         while self.running:
             data = self.queue.get()
-            result = self.__insert_beacons_to_db(data)
-            if result:
-                self.logger.info(f"Successfully entered data into database - {self.dbname}")
-                self.display_info.emit(f"Successfully entered data into database - {self.dbname}")
-            else:
-                self.logger.warning(f"Data saved to backup file - backup.sql")
-                self.display_info.emit(f"Data saved to backup file - backup.sql")
+            if data:
+                result = self.__insert_beacons_to_db(data)
+                if result:
+                    self.logger.info(f"Successfully entered data into database - {self.dbname}")
+                    self.display_info.emit(f"Successfully entered data into database - {self.dbname}")
+                else:
+                    self.logger.warning(f"Data saved to backup file - backup.sql")
+                    self.display_info.emit(f"Data saved to backup file - backup.sql")
+        self.logger.warning("Database was stopped...")
+        self.display_info.emit("Database was stopped...")        
