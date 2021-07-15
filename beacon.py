@@ -1,5 +1,8 @@
+import csv
 import datetime
+import os
 import threading
+import traceback
 from logger import Logger
 from PyQt5 import QtCore
 
@@ -14,12 +17,9 @@ class Beacon(QtCore.QThread):
         self.file_time_format = '%Y_%m_%d-%H_%M_%S'
         self.db = database
         # self.checkpoint = datetime.datetime.strftime(datetime.datetime.now(), self.time_format)
-        self.checkpoint = datetime.datetime.now()
-        self.start_time = datetime.datetime.now()
         self.check_for_devices = True if not test_devices else False
         self.test_devices = test_devices
         self.check_period = check_period
-        self.full_t_len_results = None
         self.running = False
         self.timer = threading.Timer(self.check_period, self.__query_and_calc)
         self.logger = Logger('Beacon Test')
@@ -87,14 +87,14 @@ class Beacon(QtCore.QThread):
             del res['all_ts']
         return results
 
-    def calc_full_t_len_stats(self, new_data):
-        # new_data = self.__prep_data_for_full_len_calculation(new_data)
+    def calc_full_t_len_stats(self, new_d):
+        new_data = new_d
         if not self.full_t_len_results:
             # Remove 'missing' list
-            for imei, beac_list in new_data.items():
-                for beac, beac_data in beac_list.items():
-                    if type(beac_data) == dict:
-                        del beac_data['missing']
+            # for imei, beac_list in new_data.items():
+            #     for beac, beac_data in beac_list.items():
+            #         if type(beac_data) == dict:
+            #             del beac_data['missing']
             self.full_t_len_results = new_data
         else:
             for imei, beac_list in new_data.items():
@@ -104,53 +104,89 @@ class Beacon(QtCore.QThread):
                 for beac, beac_data in beac_list.items():
                     
                     if type(beac_data) == dict:
-                        # len_missing
-                        old_len_missing = self.full_t_len_results[imei][beac]['len_missing']
-                        self.full_t_len_results[imei][beac]['len_missing'] += beac_data['len_missing']
-                        # visible_pct
-                        missing = self.full_t_len_results[imei][beac]['len_missing']
-                        all_ts = self.full_t_len_results[imei]['len_ts']
-                        self.full_t_len_results[imei][beac]['visible_pct'] = ((all_ts - missing)/all_ts) * 100
-                        # avg_rssi
-                        b = self.full_t_len_results[imei][beac]['avg_rssi']
-                        a = old_len_ts - old_len_missing
-                        a1 = self.full_t_len_results[imei]['len_ts'] - self.full_t_len_results[imei][beac]['len_missing']
-                        b1 = beac_data['avg_rssi'] 
-                        self.full_t_len_results[imei][beac]['avg_rssi'] = (b*a + b1*a1)/(a + a1)
-        # print(self.full_t_len_results)
-        # print('------------------------------------------------------------------')
-        # print(self.__pretty_stats(self.full_t_len_results, 'Full'))
+                        if self.full_t_len_results[imei].get(beac):
+                            # len_missing
+                            old_len_missing = self.full_t_len_results[imei][beac]['len_missing']
+                            self.full_t_len_results[imei][beac]['len_missing'] += beac_data['len_missing']
+                            # visible_pct
+                            missing = self.full_t_len_results[imei][beac]['len_missing']
+                            all_ts = self.full_t_len_results[imei]['len_ts']
+                            self.full_t_len_results[imei][beac]['visible_pct'] = ((all_ts - missing)/all_ts) * 100
+                            # avg_rssi
+                            b = self.full_t_len_results[imei][beac]['avg_rssi']
+                            a = old_len_ts - old_len_missing
+                            a1 = self.full_t_len_results[imei]['len_ts'] - self.full_t_len_results[imei][beac]['len_missing']
+                            b1 = beac_data['avg_rssi'] 
+                            self.full_t_len_results[imei][beac]['avg_rssi'] = (b*a + b1*a1)/(a + a1)
+                        else:
+                            self.full_t_len_results[imei][beac] = {}
+                            self.full_t_len_results[imei][beac]['len_missing'] = beac_data['len_missing']
+                            self.full_t_len_results[imei][beac]['visible_pct'] = beac_data['visible_pct']
+                            self.full_t_len_results[imei][beac]['avg_rssi'] = beac_data['avg_rssi']
 
-    # def __prep_data_for_full_len_calculation(self, data):
-    #     print(data)
-    #     print()
-    #     for _, res in data.items():
-    #         res['len_all_ts'] = len(res['all_ts'])
-    #         del res['all_ts']
-    #         for _, beac in res.items():
-    #             if type(beac) == dict:
-    #                 beac['len_all_missing'] = len(beac['missing'])
-    #     return data
+    
+    def write_results_to_files(self, periodic_stats, full_stats):
+        for imei, beac_list in periodic_stats.items():
+            len_ts = beac_list['len_ts']
+            for beac, data in beac_list.items():
+                try:
+                    for m in data['missing']:
+                        mis = {'imei':imei, 'beacon':beac, 'date':datetime.datetime.strftime(m, self.time_format)}
+                        with open(self.test_missing_file, 'a') as mf:
+                            writer = csv.DictWriter(mf, fieldnames=mis.keys())
+                            if os.stat(self.test_missing_file).st_size == 0:
+                                writer.writeheader()
+                            writer.writerow(mis)
+                except TypeError:
+                    pass
+                if type(data) == dict:
+                    del data['missing']
+                    data['imei'] = imei
+                    data['beacon'] = beac
+                    data['len_ts'] = len_ts
+                    data['stats'] = 'periodic'
+                    with open(self.test_res_file, 'a') as f:
+                        writer = csv.DictWriter(f, fieldnames=data.keys())
+                        if os.stat(self.test_res_file).st_size == 0:
+                            writer.writeheader()
+                        writer.writerow(data)
+        for imei, beac_list in full_stats.items():        
+            len_ts = beac_list['len_ts']
+            for beac, data in beac_list.items():
+                if type(data) == dict:
+                    data['imei'] = imei
+                    data['beacon'] = beac
+                    data['len_ts'] = len_ts
+                    data['stats'] = 'full'
+                    with open(self.test_res_file, 'a') as f:
+                        writer = csv.DictWriter(f, fieldnames=data.keys())
+                        writer.writerow(data)
+        self.logger.info("Results are written to csv file.")
+        self.display_info.emit("Results are written to csv file.")
 
     def __query_and_calc(self):
-        if self.check_for_devices:
-            self.update_test_devices()
-        res = self.get_device_data()
-        res = self.calc_stats(res)
-        if res:
-            self.logger.info(self.__pretty_stats(res))
-            self.display_info.emit(self.__pretty_stats(res))
-            self.checkpoint = datetime.datetime.now()
-            self.calc_full_t_len_stats(res)
-            self.logger.info(f"Checkpoint is updated to {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
-            self.display_info.emit(f"Checkpoint is updated to {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
-            self.logger.info(self.__pretty_stats(self.full_t_len_results, 'Full'))
-            self.display_info.emit(self.__pretty_stats(self.full_t_len_results, 'Full'))
-        else:
-            self.logger.warning(f"Couldn't gather statistics. Checkpoint remains at {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
-            self.display_info.emit(f"Couldn't gather statistics. Checkpoint remains at {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
-        self.timer = threading.Timer(self.check_period, self.__query_and_calc)
-        if self.running: self.timer.start()
+        try:
+            if self.check_for_devices:
+                self.update_test_devices()
+            res = self.get_device_data()
+            res = self.calc_stats(res)
+            if res:
+                self.logger.info(self.__pretty_stats(res))
+                self.display_info.emit(self.__pretty_stats(res))
+                self.checkpoint = datetime.datetime.now()
+                self.calc_full_t_len_stats(res)
+                self.write_results_to_files(res, self.full_t_len_results)
+                self.logger.info(f"Checkpoint is updated to {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
+                self.display_info.emit(f"Checkpoint is updated to {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
+                self.logger.info(self.__pretty_stats(self.full_t_len_results, 'Full'))
+                self.display_info.emit(self.__pretty_stats(self.full_t_len_results, 'Full'))
+            else:
+                self.logger.warning(f"Couldn't gather statistics. Checkpoint remains at {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
+                self.display_info.emit(f"Couldn't gather statistics. Checkpoint remains at {datetime.datetime.strftime(self.checkpoint, self.time_format)}")
+            self.timer = threading.Timer(self.check_period, self.__query_and_calc)
+            if self.running: self.timer.start()
+        except Exception as e:
+            self.logger.error(traceback.format_exc())
 
     def __pretty_stats(self, stats, res_type='Periodic'):
         text = f'{res_type} ({self.check_period} s.) Beacon Test results:\n\n'
@@ -180,13 +216,17 @@ class Beacon(QtCore.QThread):
 
     def stop(self):
         self.running = False
-        self.full_t_len_results = None
         self.timer.cancel()
 
     def run(self):
+        self.full_t_len_results = None
+        self.checkpoint = datetime.datetime.now()
+        self.start_time = datetime.datetime.now()
         # Creating test and "missing" files for the test.
-        open(f'test_{datetime.datetime.strftime(self.start_time, self.file_time_format)}.csv', 'w').close()
-        open(f'missing_{datetime.datetime.strftime(self.start_time, self.file_time_format)}.csv', 'w').close()
+        self.test_res_file = f'test_{datetime.datetime.strftime(self.start_time, self.file_time_format)}.csv'
+        self.test_missing_file = f'missing_{datetime.datetime.strftime(self.start_time, self.file_time_format)}.csv'
+        open(self.test_res_file, 'w').close()
+        open(self.test_missing_file, 'w').close()
         self.logger.info(f"Test has been started. Period: {self.check_period}")
         self.display_info.emit(f"Test has been started. Period: {self.check_period}")
         self.running = True
