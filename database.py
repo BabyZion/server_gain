@@ -24,6 +24,7 @@ class Database(QtCore.QThread):
         self.cursor = None
         self.running = False
         self.connected = False
+        open('backup.sql', 'a').close()
         self.queue = SimpleQueue()
         self.logger = Logger('Database')
 
@@ -161,6 +162,12 @@ class Database(QtCore.QThread):
             except psycopg2.OperationalError as e:
                 self.logger.error(f"Unable to add BACKUP to database - {e}")
                 self.display_info.emit(f"Unable to add BACKUP to database - {e}")
+            except psycopg2.errors.SyntaxError as e:
+                self.logger.error(f"Pasibly corrupted backup file - {e}.")
+                self.display_info.emit(f"Pasibly corrupted backup file - {e}.")
+                with open('backup_err.sql', 'a') as f:
+                    f.write(open("backup.sql", "r").read())
+                open('backup.sql', 'w').close()
 
     def stop(self):
         # Look for alternative way to wait for queue to become empty.
