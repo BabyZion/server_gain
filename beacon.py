@@ -21,7 +21,6 @@ class Beacon(QtCore.QThread):
         self.test_devices = test_devices
         self.check_period = check_period
         self.running = False
-        self.timer = threading.Timer(self.check_period, self.__query_and_calc)
         self.logger = Logger('Beacon Test')
 
         
@@ -226,13 +225,12 @@ class Beacon(QtCore.QThread):
                     text += '\n'
             return text
         except KeyError:
-            print(traceback.format_exc())
-            print(stats)
-            os.exit(1)
+            self.logger.error(traceback.format_exc())
 
     def stop(self):
         self.running = False
-        self.timer.cancel()
+        if self.timer:
+            self.timer.cancel()
 
     def run(self):
         self.full_t_len_results = None
@@ -246,4 +244,5 @@ class Beacon(QtCore.QThread):
         self.logger.info(f"Test has been started. Period: {self.check_period}")
         self.display_info.emit(f"Test has been started. Period: {self.check_period}")
         self.running = True
+        self.timer = threading.Timer(self.check_period, self.__query_and_calc)
         self.timer.start()
