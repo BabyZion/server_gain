@@ -49,7 +49,7 @@ class Application(QtWidgets.QMainWindow):
         self.database = Database(self.settings.value('dbname'), self.settings.value('user'),
             self.settings.value('host'), self.settings.value('password'))
         self.database.display_info.connect(self.append_text_browser)
-        self.beacon = Beacon(self.database, None, 60)
+        self.beacon = Beacon(self.database, None, 15)
         self.beacon.display_info.connect(self.append_text_browser)
         self.logger = Logger('Application')
         self.logger.info(f"Application started.")
@@ -110,8 +110,11 @@ class Application(QtWidgets.QMainWindow):
         self.__change_server_widget_state(self.main_window.horizontalLayout_2)
         self.__inverse_start_stop_button('start')
         self.main_window.actionSelectCert.setEnabled(True)
-        self.append_text_browser(f"{self.trans_prot} server on port {self.port} was closed with all it's connections.")
-        self.logger.info(f"{self.trans_prot} server on port {self.port} was closed with all it's connections.")
+        try:
+            self.append_text_browser(f"{self.trans_prot} server on port {self.port} was closed with all it's connections.")
+            self.logger.info(f"{self.trans_prot} server on port {self.port} was closed with all it's connections.")
+        except AttributeError:
+            pass
 
     def auto_sending(self):
         checked = self.main_window.checkBox.isChecked()
@@ -298,6 +301,7 @@ class Server(QtCore.QThread):
         self.conn_threads = []
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
         self.running = False
+        self.trans_prot = None
         self.use_ssl = None
         self.certfile = None
         self.keyfile = None

@@ -4,6 +4,7 @@ import os
 import psycopg2
 import socket
 import threading
+import traceback
 from logger import Logger
 from PyQt5 import QtCore
 from queue import SimpleQueue
@@ -57,10 +58,11 @@ class Database(QtCore.QThread):
             self.display_info.emit(f"Unable to connect to database - {e}")     
 
     def disconnect(self):
-        self.cursor.close()
-        self.connection.close()
-        self.logger.warning(f"Disconnected from database - {self.dbname}")
-        self.display_info.emit(f"Disconnected from database - {self.dbname}")
+        if self.connected:
+            self.cursor.close()
+            self.connection.close()
+            self.logger.warning(f"Disconnected from database - {self.dbname}")
+            self.display_info.emit(f"Disconnected from database - {self.dbname}")
 
     def insert_into(self, table, data):
         columns = data.keys()
@@ -72,13 +74,18 @@ class Database(QtCore.QThread):
             ent_id = self.cursor.fetchone()[0]
             self.connection.commit()
             return ent_id
-        except psycopg2.OperationalError as e:
+        except (psycopg2.OperationalError, TypeError) as e:
             self.connected = False
             threading.Timer(10, self.connect).start()
             self.logger.error(f"Unable to add data to database - {e}")
             self.display_info.emit(f"Unable to add data to database - {e}")
+        except psycopg2.errors.NumericValueOutOfRange:
+            self.logger.error(traceback.format_exc())
+            self.disconnect()
+            self.connect()
 
     def request(self, req):
+        self.logger.info(f'Request: {req}')
         if self.connected:
             try:
                 self.cursor.execute(req)
