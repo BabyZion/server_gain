@@ -16,6 +16,7 @@ from database import Database
 from PyQt5 import QtWidgets, QtCore, Qt
 from window import Ui_MainWindow
 from dbSettings import Ui_dbSettings
+from beaconSettings import Ui_BeaconSettings
 
 __version__ = '1.2'
 
@@ -36,9 +37,11 @@ class Application(QtWidgets.QMainWindow):
         self.main_window.actionSelectCert.triggered.connect(self.select_certs)
         self.main_window.actionCreateCert.triggered.connect(self.not_implemented_warning)
         self.main_window.actionDatabaseSettings.triggered.connect(self.db_settings)
+        self.main_window.actionBeaconSettings.triggered.connect(self.beacon_settings)
         self.__change_server_widget_state(self.main_window.horizontalLayout_2)
         self.main_window.pushButtonDisconnect.setEnabled(False)
         self.databaseSettingsWindow = None
+        self.beaconSettingsWindow = None
         self.show()
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
         self.server = Server()
@@ -49,7 +52,13 @@ class Application(QtWidgets.QMainWindow):
         self.database = Database(self.settings.value('dbname'), self.settings.value('user'),
             self.settings.value('host'), self.settings.value('password'))
         self.database.display_info.connect(self.append_text_browser)
-        self.beacon = Beacon(self.database, None, 15)
+        b_tDevices = self.settings.value('b_tDevices')
+        b_period = self.settings.value('b_period')
+        if b_period:
+            b_period = int(b_period)
+        else:
+            b_period = 60
+        self.beacon = Beacon(self.database, b_tDevices, b_period)
         self.beacon.display_info.connect(self.append_text_browser)
         self.logger = Logger('Application')
         self.logger.info(f"Application started.")
@@ -172,6 +181,10 @@ class Application(QtWidgets.QMainWindow):
         self.databaseSettingsWindow = DatabaseSettings(self.database)
         self.databaseSettingsWindow.show()
 
+    def beacon_settings(self):
+        self.beaconSettingsWindow = BeaconSettings(self.beacon)
+        self.beaconSettingsWindow.show()
+
     def beacon_test(self):
         checked = self.main_window.checkBoxBeacon.isChecked()
         self.server.beacon = checked
@@ -257,6 +270,8 @@ class Application(QtWidgets.QMainWindow):
         self.settings.setValue('user', self.database.user)
         self.settings.setValue('host', self.database.host)
         self.settings.setValue('password', self.database.password)
+        self.settings.setValue('b_period', self.beacon.check_period)
+        self.settings.setValue('b_tDevices', self.beacon.test_devices)
 
 
 class DatabaseSettings(QtWidgets.QDialog):
@@ -280,6 +295,32 @@ class DatabaseSettings(QtWidgets.QDialog):
             self.hide()
             self.db.disconnect()
             self.db.connect()
+        self.done(1)
+
+
+class BeaconSettings(QtWidgets.QDialog):
+    
+    def __init__(self, beacon):
+        super().__init__()
+        self.settings_window = Ui_BeaconSettings()
+        self.settings_window.setupUi(self)
+        self.beacon = beacon
+        self.settings_window.periodLineEdit.setText(str(self.beacon.check_period))
+        if self.beacon.test_devices:
+            self.settings_window.tDevicesLineEdit.setText(str(self.beacon.test_devices).strip('][').replace("'", ''))
+            # str(self.beacon.test_devices).strip('][').replace("'", '').strip()
+        else:
+            self.settings_window.tDevicesLineEdit.setText()
+
+    def accept(self):
+        self.beacon.check_period = int(self.settings_window.periodLineEdit.text())
+        str_list = self.settings_window.tDevicesLineEdit.text()
+        self.beacon.test_devices = str_list.strip('][').replace(" ", "").split(',')
+        print(self.beacon.test_devices, type(self.beacon.test_devices))
+        if self.beacon.running:
+            self.hide()
+            self.beacon.timer.cancel()
+            self.beacon.timer.start()
         self.done(1)
 
 
