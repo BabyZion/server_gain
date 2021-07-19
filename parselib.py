@@ -300,7 +300,7 @@ def parse_beacon_avl_id_advanced(data, timestamp):
                 param_id, bec_data = bec_data[:2], bec_data[2:]
                 param_len, bec_data = int(bec_data[:2],16), bec_data[2:]
                 param_data, bec_data = bec_data[:param_len*2], bec_data[param_len*2:]
-                beacon[f'param {param_id}'] = param_data
+                beacon[f'param_{param_id}'] = param_data
             beacons.append(beacon)
     else:
         # 3rd iteration Advanced (Universal) Beacons configuration (Eval 03.27.01.Rev.120) Simple
