@@ -17,10 +17,14 @@ __version__ = '1.2'
 class Application(QtWidgets.QMainWindow):
 
     def __init__(self):
+        """
+        Initializes application class. Used for GUI and control of main modules of the application.
+        """
         super().__init__()
         self.settings = QtCore.QSettings('server_gain', 'app_settings')
         self.main_window = Ui_MainWindow()
         self.main_window.setupUi(self)
+        # Lines bellow connect various widgets with application functions.
         self.main_window.pushButtonSend.pressed.connect(self.send_gprs_cmd)
         self.main_window.lineEdit.returnPressed.connect(self.send_gprs_cmd)
         self.main_window.pushButtonStart.pressed.connect(self.start_server)
@@ -34,10 +38,12 @@ class Application(QtWidgets.QMainWindow):
         self.main_window.actionBeaconSettings.triggered.connect(self.beacon_settings)
         self.__change_server_widget_state(self.main_window.horizontalLayout_2)
         self.main_window.pushButtonDisconnect.setEnabled(False)
+        # Settings windows that are called via toolbar at the top of application.
         self.databaseSettingsWindow = None
         self.beaconSettingsWindow = None
         self.show()
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
+        # Lines bellow initialize other application modules like server, database, etc.
         self.server = Server()
         self.server.display_info.connect(self.append_text_browser)
         self.server.new_conn.connect(self.add_conn)
@@ -61,16 +67,36 @@ class Application(QtWidgets.QMainWindow):
             self.main_window.radioButtonTCP, self.main_window.radioButtonUDP, self.main_window.checkBoxSSL]
         
     def append_text_browser(self, data):
+        """
+        Adds and displays information in GUI. Additionally, adds time in front of the information.
+        
+        Parameters:
+            data (str): information to be displayed in GUI window (such as server data or various module state)
+        """
         time_recv = datetime.strftime(datetime.now(), self.time_format)
         self.main_window.textBrowser.append(f'[{time_recv}] - {data}')
 
     def add_conn(self, imei):
+        """
+        Handles GUI objects when servers receives a new connection. Appends combo box with IMEIs, increments
+        active client count.
+
+        Parameters:
+            imei (str): imei of the device that has connected.
+        """
         self.main_window.comboBox.addItem(imei)
         self.main_window.labelCount.setText(str(self.server.clients))
         self.main_window.pushButtonDisconnect.setEnabled(True)
         self.logger.info(f'New IMEI - {imei} added to client list. New no. of clients: {self.server.clients}.')
     
     def del_conn(self, imei):
+        """
+        Handles GUI objects when device disconnects from the server. Removes IMEI from the combo box, decrements
+        active client count.
+
+        Parameters:
+            imei (str): imei of the device that has disconnected.
+        """
         index = self.main_window.comboBox.findText(imei)
         self.main_window.comboBox.removeItem(index)
         self.main_window.labelCount.setText(str(self.server.clients))
@@ -80,33 +106,48 @@ class Application(QtWidgets.QMainWindow):
             self.logger.warning(f'Server has no clients.')
 
     def send_gprs_cmd(self):
+        """
+        Function is triggered when "SEND" button is pressed. Gathers information from GUI reqirered for
+        GPRS cmd sending. Uses server object to send that command to the device selected.
+        """
         cmd = self.main_window.lineEdit.text() + '\r\n'
         imei = self.main_window.comboBox.currentText()
         self.server.send_cmd(cmd, imei)
         self.logger.info(f'GPRS CMD {cmd} is sent to {imei}.')
 
     def start_server(self):
-        # Start server
+        """
+        Function is triggered when "START" button is pressed. Starts server operation.
+        Also starts other modules if they're configured.
+        """
         self.trans_prot = self.main_window.buttonGroup.checkedButton().text()
         self.port = self.main_window.spinBox.value()
         self.use_ssl = self.main_window.checkBoxSSL.isChecked()
+        # Following 4 lines change states of GUI objects.
         self.__change_server_widget_state(self.server_settings_widgets)
         self.__change_server_widget_state(self.main_window.horizontalLayout_2)
         self.__inverse_start_stop_button('stop')
         self.main_window.actionSelectCert.setEnabled(False)
+        # Following 2 lines create server socket and start server thread.
         self.server.create_socket(self.port, self.trans_prot, self.use_ssl)
         self.server.start()
         self.append_text_browser(f"{self.trans_prot} server started on port {self.port}. SSL enabled - {self.use_ssl}.")
         self.logger.info(f"{self.trans_prot} server started on port {self.port}. SSL enabled - {self.use_ssl}.")
-        # Open connection to Database if configured.
+        # If "Beacon" checkbox is checked, modules requirered for beacon test are started as well.
         if self.main_window.checkBoxBeacon.isChecked():
             self.database.start()
             self.beacon.start()
 
     def stop_server(self):
+        """
+        Function is triggered when "STOP" button is pressed. Stops server operation.
+        Also starts other modules if they're configured.
+        """
+        # Stopping other modules.
         self.database.stop()
         self.beacon.stop()
         self.server.close()
+        # Handling GUI.
         if self.main_window.checkBox.isChecked():
             self.main_window.checkBox.setChecked(False)
         self.__change_server_widget_state(self.server_settings_widgets)
@@ -120,6 +161,11 @@ class Application(QtWidgets.QMainWindow):
             pass
 
     def auto_sending(self):
+        """
+        Function is triggered when the state of "Automatic" checkbox changes.
+        If it's checked - uses server to start automatic GPRS cmd sending.
+        If it's unchecked - stops automatic GPRS cmd sending.
+        """
         checked = self.main_window.checkBox.isChecked()
         period = self.main_window.spinBoxSeconds.value()
         self.server.automatic = checked
@@ -135,11 +181,19 @@ class Application(QtWidgets.QMainWindow):
         self.main_window.lineEdit.setEnabled(not checked)
 
     def disconnect_client(self):
+        """
+        Function is triggered when "DISCONNECT" button is pressed.
+        Uses server to terminate the connection with the device specified.
+        """
         imei = self.main_window.comboBox.currentText()
         self.logger.info(f'Disconnect from client {imei} initiated by user action.')
         self.server.disconnect_client(imei)
 
     def cert_warning(self):
+        """
+        Triggered when configuring SSL certificates. Warns user that not all requirered
+        certificates are selected.
+        """
         warn = QtWidgets.QMessageBox(self)
         warn.setIcon(QtWidgets.QMessageBox.Warning)
         warn.setText("Not all certificates required for SSL communication are selected. "
@@ -155,12 +209,19 @@ class Application(QtWidgets.QMainWindow):
         warn.done(1)
         
     def check_certs(self):
+        """
+        Checks if user has selected certificates requirered for SSL communication.
+        """
         ssl_checkbox = self.main_window.checkBoxSSL
         if ssl_checkbox.isChecked():
             if not self.server.certfile or not self.server.keyfile:
                 self.cert_warning()
 
     def select_certs(self):
+        """
+        Triggered when Certificates --> Select button is pressed. Displays File Dialog window
+        for certificate selection.
+        """
         cert_files = QtWidgets.QFileDialog.getOpenFileNames(self, filter="Certfile, Keyfile (*.pem *.key)")
         if cert_files[0]:    
             for f in cert_files[0]:
@@ -172,14 +233,24 @@ class Application(QtWidgets.QMainWindow):
                 f'\nKeyfile: {self.server.keyfile}')
 
     def db_settings(self):
+        """
+        Displays Database settings window.
+        """
         self.databaseSettingsWindow = DatabaseSettings(self.database)
         self.databaseSettingsWindow.show()
 
     def beacon_settings(self):
+        """
+        Displays Beacon Test settings window.
+        """
         self.beaconSettingsWindow = BeaconSettings(self.beacon)
         self.beaconSettingsWindow.show()
 
     def beacon_test(self):
+        """
+        Function is triggered when "Beacon" checkbox state changes.
+        Toggles on/off beacon packet parsing of the server.
+        """
         checked = self.main_window.checkBoxBeacon.isChecked()
         self.server.beacon = checked
         if checked:
@@ -188,9 +259,19 @@ class Application(QtWidgets.QMainWindow):
             self.logger.info(f"Server is exiting from Beacon Testing mode.")
 
     def pass_to_database(self, data):
+        """
+        Function is triggered by the server via pyqtSignal.
+        Passes data received by the server to the database module into a queue.
+
+        Parameters:
+            data (dict): data received by the server to be passed to the database.
+        """
         self.database.queue.put(data)
 
     def not_implemented_warning(self):
+        """
+        Displays warning when functionality that is not implemented yet is used.
+        """
         warn = QtWidgets.QMessageBox(self)
         warn.setIcon(QtWidgets.QMessageBox.Warning)
         warn.setText("This feature is not yet implemented. :(")
@@ -200,6 +281,11 @@ class Application(QtWidgets.QMainWindow):
         ret_val = warn.exec_()
 
     def closeEvent(self, event):
+        """
+        Triggered when EXIT button is pressed and application is closed.
+        Stops server and other modules configured.
+        Saves the state of GUI objects.
+        """
         self.stop_server()
         self.__save_settings()
 
@@ -230,6 +316,9 @@ class Application(QtWidgets.QMainWindow):
             self.main_window.pushButtonStart.pressed.connect(self.stop_server)
 
     def __load_settings(self):
+        """
+        Loads settings of GUI widgets.
+        """
         try:
             self.resize(self.settings.value('win_size'))
             self.move(self.settings.value('win_pos'))
@@ -252,6 +341,9 @@ class Application(QtWidgets.QMainWindow):
             pass
 
     def __save_settings(self):
+        """
+        Saves settings of GUI widgets.
+        """
         self.settings.setValue('win_size', self.size())
         self.settings.setValue('win_pos', self.pos())
         self.settings.setValue('port', self.main_window.spinBox.value())
@@ -269,7 +361,7 @@ class Application(QtWidgets.QMainWindow):
 
 
 class DatabaseSettings(QtWidgets.QDialog):
-    
+
     def __init__(self, db):
         super().__init__()
         self.settings_window = Ui_dbSettings()
@@ -302,7 +394,6 @@ class BeaconSettings(QtWidgets.QDialog):
         self.settings_window.periodLineEdit.setText(str(self.beacon.check_period))
         if self.beacon.test_devices:
             self.settings_window.tDevicesLineEdit.setText(str(self.beacon.test_devices).strip('][').replace("'", ''))
-            # str(self.beacon.test_devices).strip('][').replace("'", '').strip()
         else:
             self.settings_window.tDevicesLineEdit.setText()
 

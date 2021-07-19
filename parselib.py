@@ -322,6 +322,15 @@ def parse_beacon_avl_id_advanced(data, timestamp):
         return beacons
 
 def pretty_beacon_data(beacon_data):
+    """
+    Takes dict containing beacon data and returns human readable represantation of it in str.
+
+        Parameters:
+            beacon_data (dict): dictionary containing beacon information (dict from the list returned by
+            parse_beacon_avl_id_* function).
+        Returns:
+            data (str): human readable represantation of beacon data.
+    """
     data = '\n'
     for i,v in beacon_data.items():
         data += f"{i}: {v}\n"

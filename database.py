@@ -12,9 +12,12 @@ from queue import SimpleQueue
 
 class Database(QtCore.QThread):
 
-    display_info = QtCore.pyqtSignal(str)
+    display_info = QtCore.pyqtSignal(str) # Used to display information in GUI text browser.
 
     def __init__(self, dbname, user, host, password):
+        """
+        Initializes database object and creates backup file.
+        """
         super().__init__()
         self.dbname = dbname
         self.user = user
@@ -25,10 +28,15 @@ class Database(QtCore.QThread):
         self.running = False
         self.connected = False
         open('backup.sql', 'a').close()
+        # Queue used to enter data received from the server.
         self.queue = SimpleQueue()
         self.logger = Logger('Database')
 
     def connect(self):
+        """
+        Connects to database. If connection couldn't be established - starts threading timer
+        to periodically ( every 10 s. - hardcoded ) try to establish connection.
+        """
         self.logger.info(f"Trying to connect to {self.host}")
         self.display_info.emit(f"Trying to connect to {self.host}")
         args = f"dbname='{self.dbname}' user='{self.user}' host='{self.host}' password='{self.password}'"
@@ -37,7 +45,7 @@ class Database(QtCore.QThread):
             self.connection = psycopg2.connect(args)
             # This allows connection to raise psycopg2.OperationalError when database becomes unavailable
             # during transaction. Othervise, transaction hangs on cursor operations. 
-            # FOR UNIX TYPE MACHINES ONLY
+            # FOR UNIX LIKE MACHINES ONLY
             try:
                 s = socket.fromfd(self.connection.fileno(), socket.AF_INET, socket.SOCK_STREAM)
                 s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
@@ -51,14 +59,19 @@ class Database(QtCore.QThread):
             self.connected = True
             self.logger.info(f"Successfully connected to database - {self.dbname}")
             self.display_info.emit(f"Successfully connected to database - {self.dbname}")
+            # If connection is successfully established, enter data from backup file to database.
             self.__insert_backup_to_db()
         except psycopg2.OperationalError as e:
             self.connected = False
+            # Periodically try to reconnect.
             threading.Timer(10, self.connect).start()
             self.logger.error(f"Unable to connect to database - {e}")
             self.display_info.emit(f"Unable to connect to database - {e}")     
 
     def disconnect(self):
+        """
+        Disconnects from database.
+        """
         if self.connected:
             self.cursor.close()
             self.connection.close()
@@ -66,6 +79,13 @@ class Database(QtCore.QThread):
             self.display_info.emit(f"Disconnected from database - {self.dbname}")
 
     def insert_into(self, table, data):
+        """
+        Inserts information from Python dictionary to the database.
+
+        Parameters:
+            table (str): name of the table to insert data to.
+            data (dict): dictionary of data to be inserted.
+        """
         columns = data.keys()
         values = data.values()
         insert_que = f"INSERT INTO {table} (%s) VALUES %s RETURNING id"
@@ -86,6 +106,12 @@ class Database(QtCore.QThread):
             self.connect()
 
     def request(self, req):
+        """
+        Executes SQL request.
+
+        Parameters:
+            req (str): SQL request to be executed.
+        """
         self.logger.info(f'Request: {req}')
         if self.connected:
             try:
@@ -99,6 +125,13 @@ class Database(QtCore.QThread):
                 self.display_info.emit(f"Unable to execute the request - {e}")
 
     def __insert_beacons_to_db(self, data):
+        """
+        Spaghetti code that does various nonesense with beacon data to be inserted to database and
+        than actually inserts it into database.
+
+        Parameters:
+            data (list): beacon data to be inserted to database.
+        """
         imei = data[0]
         curr_ts = None
         prev_ts = None
@@ -145,24 +178,32 @@ class Database(QtCore.QThread):
         return succsess
         
     def __to_backup(self, backup):
+        """
+        Creates SQL request and stores it to the backup file.
+        """
         insert_que = backup['rec'] + '\n' + '\n'.join(backup['beacons'])
         sql_cmd = f"DO $$DECLARE beacid integer; BEGIN {insert_que} END $$;"
         with open('backup.sql', 'a') as f:
             f.write(sql_cmd + '\n')
 
     def __insert_backup_to_db(self):
+        """
+        Executes SQL queries from backup file.
+        """
         if self.connected and os.stat('backup.sql').st_size > 0:
             self.logger.info(f"Backup file is not empty. Entering backup data to database - {self.dbname}")
             self.display_info.emit(f"Backup file is not empty. Entering backup data to database - {self.dbname}")
             try:
                 self.cursor.execute(open("backup.sql", "r").read())
-                open('backup.sql', 'w').close()
+                open('backup.sql', 'w').close() # Clears backup file.
                 self.logger.info(f"Successfully entered backup data to database - {self.dbname}")
                 self.display_info.emit(f"Successfully entered backup data to database - {self.dbname}")
             except psycopg2.OperationalError as e:
                 self.logger.error(f"Unable to add BACKUP to database - {e}")
                 self.display_info.emit(f"Unable to add BACKUP to database - {e}")
             except psycopg2.errors.SyntaxError as e:
+                # If somehow backup file got corrupted, clears the backup file and
+                # places corrupted data in another file.
                 self.logger.error(f"Pasibly corrupted backup file - {e}.")
                 self.display_info.emit(f"Pasibly corrupted backup file - {e}.")
                 with open('backup_err.sql', 'a') as f:
@@ -170,6 +211,9 @@ class Database(QtCore.QThread):
                 open('backup.sql', 'w').close()
 
     def stop(self):
+        """
+        Closes connection with database and stops database main thread.
+        """
         # Look for alternative way to wait for queue to become empty.
         while not self.queue.empty():
             pass
@@ -178,6 +222,9 @@ class Database(QtCore.QThread):
         self.disconnect()
 
     def run(self):
+        """
+        Main database thread method.
+        """
         self.logger.info(f"Main database settings: dbname='{self.dbname}' user='{self.user}'"
         f" host='{self.host}' password='{self.password}'")
         self.display_info.emit(f"Main database settings: dbname='{self.dbname}' user='{self.user}'"

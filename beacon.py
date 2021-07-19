@@ -9,9 +9,12 @@ from PyQt5 import QtCore
 
 class Beacon(QtCore.QThread):
 
-    display_info = QtCore.pyqtSignal(str)
+    display_info = QtCore.pyqtSignal(str) # Used to display information in GUI text browser.
 
     def __init__(self, database, test_devices=None, check_period=None):
+        """
+        Initializes beacon object.
+        """
         super().__init__()
         self.time_format = '%Y.%m.%d %H:%M:%S.%f'
         self.file_time_format = '%Y_%m_%d-%H_%M_%S'
@@ -20,11 +23,15 @@ class Beacon(QtCore.QThread):
         self.check_for_devices = True if not test_devices else False
         self.test_devices = test_devices
         self.check_period = check_period
+        self.timer = None
         self.running = False
         self.logger = Logger('Beacon Test')
 
         
     def update_test_devices(self):
+        """
+        Updates the list of devices that participate in the test if they're not specified.
+        """
         # req = f"SELECT DISTINCT imei FROM beacons WHERE timestamp > '{self.start_time}';"
         checkpoint = datetime.datetime.strftime(self.checkpoint, self.time_format)
         req = f"SELECT DISTINCT imei FROM beacon_records WHERE timestamp >= '{checkpoint}';"
@@ -41,6 +48,12 @@ class Beacon(QtCore.QThread):
             self.display_info.emit(f"Couldn't update participating device list.")
 
     def get_device_data(self):
+        """
+        Get data from database that is needed for periodic test calculation.
+
+        Returns:
+            data (list of tuple): data from database. If no data was received, returns None.
+        """
         checkpoint = datetime.datetime.strftime(self.checkpoint, self.time_format)
         req = f"SELECT imei, uuid, timestamp, signal_str, beacon_records.id FROM beacon_records FULL OUTER JOIN beacons ON beacon_records.id = beacons.record WHERE timestamp >= '{checkpoint}' ORDER BY timestamp;"
         data = self.db.request(req)
@@ -56,6 +69,15 @@ class Beacon(QtCore.QThread):
         return None
 
     def calc_stats(self, data):
+        """
+        Calculates periodic statistics from the data supplied to the method.
+
+        Parameters:
+            data (list of tuple): data received from database.
+
+        Returns:
+            results (dict): dictionary of calculate statistics and other information.
+        """
         results = {}
         curr_ts = None
         if data:
@@ -91,6 +113,13 @@ class Beacon(QtCore.QThread):
         return results
 
     def calc_full_t_len_stats(self, new_d):
+        """
+        Crazy spaghetti method that updates self.full_t_len_results dictionary that stores
+        results of full test length results.
+
+        Parameters:
+            new_d (dict): periodic results.
+        """
         new_data = new_d
         if not self.full_t_len_results:
             # Remove 'missing' list
@@ -136,6 +165,14 @@ class Beacon(QtCore.QThread):
                        self.full_t_len_results[imei][beacon]['len_missing'] += beac_list['len_ts']
                     
     def write_results_to_files(self, periodic_stats, full_stats):
+        """
+        Writes results to .csv files.
+
+        Parameters:
+            periodic_stats (dict): periodic statistics to be written.
+            full_stats (dict): full test length statistics up to that point
+            (should be self.full_t_len_results variable)
+        """
         try:
             for imei, beac_list in periodic_stats.items():
                 for beac, data in beac_list.items():
@@ -175,6 +212,10 @@ class Beacon(QtCore.QThread):
             self.display_info.emit("Results of this period couldn't be written to file - {e}")
 
     def __query_and_calc(self):
+        """
+        Method used to periodically run query to database to gather information and calculate statistics of the test.
+        It recursively calls threading timer to execute periodically.
+        """
         try:
             if self.check_for_devices:
                 self.update_test_devices()

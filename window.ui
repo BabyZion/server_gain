@@ -316,8 +316,15 @@
     <addaction name="separator"/>
     <addaction name="actionDatabaseSettings"/>
    </widget>
+   <widget class="QMenu" name="menuBeacon">
+    <property name="title">
+     <string>Beacon</string>
+    </property>
+    <addaction name="actionBeaconSettings"/>
+   </widget>
    <addaction name="menuCertfiles"/>
    <addaction name="menuDatabase"/>
+   <addaction name="menuBeacon"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionSelectCert">
@@ -337,6 +344,11 @@
    </property>
   </action>
   <action name="actionDatabaseSettings">
+   <property name="text">
+    <string>Settings</string>
+   </property>
+  </action>
+  <action name="actionBeaconSettings">
    <property name="text">
     <string>Settings</string>
    </property>
