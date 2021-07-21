@@ -54,6 +54,12 @@ class Ui_dbSettings(object):
         self.passwordLineEdit = QtWidgets.QLineEdit(self.formLayoutWidget)
         self.passwordLineEdit.setObjectName("passwordLineEdit")
         self.formLayout.setWidget(3, QtWidgets.QFormLayout.FieldRole, self.passwordLineEdit)
+        self.portLineEdit = QtWidgets.QLineEdit(self.formLayoutWidget)
+        self.portLineEdit.setObjectName("portLineEdit")
+        self.formLayout.setWidget(4, QtWidgets.QFormLayout.FieldRole, self.portLineEdit)
+        self.portLabel = QtWidgets.QLabel(self.formLayoutWidget)
+        self.portLabel.setObjectName("portLabel")
+        self.formLayout.setWidget(4, QtWidgets.QFormLayout.LabelRole, self.portLabel)
 
         self.retranslateUi(dbSettings)
         self.buttonBox.accepted.connect(dbSettings.accept)
@@ -67,3 +73,15 @@ class Ui_dbSettings(object):
         self.userLabel.setText(_translate("dbSettings", "User"))
         self.hostLabel.setText(_translate("dbSettings", "Host"))
         self.passwordLabel.setText(_translate("dbSettings", "Password"))
+        self.portLineEdit.setText(_translate("dbSettings", "5432"))
+        self.portLabel.setText(_translate("dbSettings", "Port"))
+
+
+if __name__ == "__main__":
+    import sys
+    app = QtWidgets.QApplication(sys.argv)
+    dbSettings = QtWidgets.QDialog()
+    ui = Ui_dbSettings()
+    ui.setupUi(dbSettings)
+    dbSettings.show()
+    sys.exit(app.exec_())
