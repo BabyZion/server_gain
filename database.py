@@ -14,15 +14,16 @@ class Database(QtCore.QThread):
 
     display_info = QtCore.pyqtSignal(str) # Used to display information in GUI text browser.
 
-    def __init__(self, dbname, user, host, password):
+    def __init__(self):
         """
         Initializes database object and creates backup file.
         """
         super().__init__()
-        self.dbname = dbname
-        self.user = user
-        self.host = host
-        self.password = password
+        self.dbname = None
+        self.user = None
+        self.host = None
+        self.password = None
+        self.port = None
         self.connection = None
         self.cursor = None
         self.running = False
@@ -39,7 +40,7 @@ class Database(QtCore.QThread):
         """
         self.logger.info(f"Trying to connect to {self.host}")
         self.display_info.emit(f"Trying to connect to {self.host}")
-        args = f"dbname='{self.dbname}' user='{self.user}' host='{self.host}' password='{self.password}'"
+        args = f"dbname='{self.dbname}' user='{self.user}' host='{self.host}' password='{self.password}' port={self.port}"
         "'connect_timeout'=3 'keepalives'=1 'keepalives_idle'=5 'keepalives_interval'=2 'keepalives_count'=2"
         try:
             self.connection = psycopg2.connect(args)
@@ -64,7 +65,8 @@ class Database(QtCore.QThread):
         except psycopg2.OperationalError as e:
             self.connected = False
             # Periodically try to reconnect.
-            threading.Timer(10, self.connect).start()
+            if self.running:
+                threading.Timer(10, self.connect).start()
             self.logger.error(f"Unable to connect to database - {e}")
             self.display_info.emit(f"Unable to connect to database - {e}")     
 
@@ -229,8 +231,8 @@ class Database(QtCore.QThread):
         f" host='{self.host}' password='{self.password}'")
         self.display_info.emit(f"Main database settings: dbname='{self.dbname}' user='{self.user}'"
         f" host='{self.host}' password='{self.password}'")
-        self.connect()
         self.running = True
+        self.connect()
         while self.running:
             data = self.queue.get()
             if data:

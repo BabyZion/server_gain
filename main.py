@@ -49,8 +49,10 @@ class Application(QtWidgets.QMainWindow):
         self.server.new_conn.connect(self.add_conn)
         self.server.closed_conn.connect(self.del_conn)
         self.server.to_db.connect(self.pass_to_database)
-        self.database = Database(self.settings.value('dbname'), self.settings.value('user'),
-            self.settings.value('host'), self.settings.value('password'))
+        self.logger = Logger('Application')
+        self.logger.info(f"Application started.")
+        # self.database = Database(self.dbname, self.user, self.host, self.password, self.db_port)
+        self.database = Database()
         self.database.display_info.connect(self.append_text_browser)
         b_tDevices = self.settings.value('b_tDevices')
         b_period = self.settings.value('b_period')
@@ -60,8 +62,6 @@ class Application(QtWidgets.QMainWindow):
             b_period = 60
         self.beacon = Beacon(self.database, b_tDevices, b_period)
         self.beacon.display_info.connect(self.append_text_browser)
-        self.logger = Logger('Application')
-        self.logger.info(f"Application started.")
         self.__load_settings()
         self.server_settings_widgets = [self.main_window.labelPort, self.main_window.spinBox,
             self.main_window.radioButtonTCP, self.main_window.radioButtonUDP, self.main_window.checkBoxSSL]
@@ -144,8 +144,9 @@ class Application(QtWidgets.QMainWindow):
         Also starts other modules if they're configured.
         """
         # Stopping other modules.
-        self.database.stop()
-        self.beacon.stop()
+        if self.main_window.checkBoxBeacon.isChecked():
+            self.database.stop()
+            self.beacon.stop()
         self.server.close()
         # Handling GUI.
         if self.main_window.checkBox.isChecked():
@@ -320,6 +321,7 @@ class Application(QtWidgets.QMainWindow):
         Loads settings of GUI widgets.
         """
         try:
+            # UI settings
             self.resize(self.settings.value('win_size'))
             self.move(self.settings.value('win_pos'))
             self.main_window.spinBox.setValue(int(self.settings.value('port')))
@@ -337,6 +339,12 @@ class Application(QtWidgets.QMainWindow):
                 self.main_window.checkBoxBeacon.setChecked(True)
             elif self.settings.value('beacon') == 'false': 
                 self.main_window.checkBoxBeacon.setChecked(False)
+            # Database settings
+            self.database.dbname = self.settings.value('dbname')
+            self.database.user = self.settings.value('user')
+            self.database.host = self.settings.value('host')
+            self.database.password = self.settings.value('password')
+            self.database.port = self.settings.value('db_port')
         except TypeError:
             pass
 
@@ -356,6 +364,7 @@ class Application(QtWidgets.QMainWindow):
         self.settings.setValue('user', self.database.user)
         self.settings.setValue('host', self.database.host)
         self.settings.setValue('password', self.database.password)
+        self.settings.setValue('db_port', self.database.port)
         self.settings.setValue('b_period', self.beacon.check_period)
         self.settings.setValue('b_tDevices', self.beacon.test_devices)
 
@@ -371,12 +380,14 @@ class DatabaseSettings(QtWidgets.QDialog):
         self.settings_window.userLineEdit.setText(self.db.user)
         self.settings_window.hostLineEdit.setText(self.db.host)
         self.settings_window.passwordLineEdit.setText(self.db.password)
+        self.settings_window.portLineEdit.setText(self.db.port)
 
     def accept(self):
         self.db.dbname = self.settings_window.databaseNameLineEdit.text()
         self.db.user = self.settings_window.userLineEdit.text()
         self.db.host = self.settings_window.hostLineEdit.text()
         self.db.password = self.settings_window.passwordLineEdit.text()
+        self.db.port = self.settings_window.portLineEdit.text()
         if self.db.running:
             self.hide()
             self.db.disconnect()
@@ -395,7 +406,7 @@ class BeaconSettings(QtWidgets.QDialog):
         if self.beacon.test_devices:
             self.settings_window.tDevicesLineEdit.setText(str(self.beacon.test_devices).strip('][').replace("'", ''))
         else:
-            self.settings_window.tDevicesLineEdit.setText()
+            self.settings_window.tDevicesLineEdit.setText('')
 
     def accept(self):
         self.beacon.check_period = int(self.settings_window.periodLineEdit.text())
